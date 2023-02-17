@@ -1,3 +1,39 @@
+module left_circular_rotate (
+	ori_vector_i,
+	req_left_rotate_num_i,
+	roteted_vector_o
+);
+	parameter N_INPUT = 2;
+	localparam [31:0] N_INPUT_WIDTH = (N_INPUT > 1 ? $clog2(N_INPUT) : 1);
+	input wire [N_INPUT - 1:0] ori_vector_i;
+	input wire [N_INPUT_WIDTH - 1:0] req_left_rotate_num_i;
+	output wire [N_INPUT - 1:0] roteted_vector_o;
+	wire [(N_INPUT * 2) - 1:0] ori_vector_mid;
+	assign ori_vector_mid = {ori_vector_i, ori_vector_i} << req_left_rotate_num_i;
+	assign roteted_vector_o = ori_vector_mid[(N_INPUT * 2) - 1-:N_INPUT];
+endmodule
+module oh2idx (
+	oh_i,
+	idx_o
+);
+	parameter [31:0] N_INPUT = 2;
+	localparam [31:0] N_INPUT_WIDTH = (N_INPUT > 1 ? $clog2(N_INPUT) : 1);
+	input [N_INPUT - 1:0] oh_i;
+	output wire [N_INPUT_WIDTH - 1:0] idx_o;
+	genvar i;
+	genvar j;
+	wire [(N_INPUT_WIDTH * N_INPUT) - 1:0] mask;
+	generate
+		for (i = 0; i < N_INPUT_WIDTH; i = i + 1) begin : gen_mask_i
+			for (j = 0; j < N_INPUT; j = j + 1) begin : gen_mask_j
+				assign mask[(i * N_INPUT) + j] = (j / (2 ** i)) % 2;
+			end
+		end
+		for (i = 0; i < N_INPUT_WIDTH; i = i + 1) begin : gen_idx_o
+			assign idx_o[i] = |(oh_i & mask[i * N_INPUT+:N_INPUT]);
+		end
+	endgenerate
+endmodule
 module onehot_mux (
 	sel_i,
 	data_i,
@@ -23,6 +59,18 @@ module onehot_mux (
 			assign data_o[i] = |select_mat[i * SOURCE_COUNT+:SOURCE_COUNT];
 		end
 	endgenerate
+endmodule
+module one_hot_priority_encoder (
+	sel_i,
+	sel_o
+);
+	parameter [31:0] SEL_WIDTH = 8;
+	input wire [SEL_WIDTH - 1:0] sel_i;
+	output wire [SEL_WIDTH - 1:0] sel_o;
+	localparam [31:0] SEL_ID_WIDHT = $clog2(SEL_WIDTH);
+	wire [SEL_WIDTH - 1:0] sel_mask;
+	assign sel_mask = (~sel_i + 1'b1) & sel_i;
+	assign sel_o = sel_mask;
 endmodule
 module one_hot_rr_arb (
 	req_i,
