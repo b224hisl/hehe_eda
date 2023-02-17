@@ -5,12 +5,36 @@ vnet_router
             onehot_mux
             mp_fifo
                 usage_manager
+                one_counter
+
     sa_local
+        priority_req_select  ？priority_compare_vector
+        one_hot_rr_arb
+            oh2idx
+            left_circular_rotate
+            one_hot_priority_encoder
+        one_hot_mux
+
     sa_global
+        priority_req_select  ？priority_compare_vecto
+        one_hot_rr_arb
+            oh2idx
+            left_circular_rotate
+            one_hot_priority_encoder
+        one_hot_mux
+
     onehot_mux
+
     look_ahead_routing
+
     output_port_vc_credit_counter
+        std_dffre
+
     output_port_vc_selection
+
     input_to_output ?
+
     switch 
+
     performance monitor
+        std_dffre
