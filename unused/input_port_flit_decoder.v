@@ -9,4 +9,5 @@ assign flit_dec_o.qos_value = flit[QoS_Value_Width-1:0];
 assign flit_dec_o.tgt_id = flit[QoS_Value_Width+NodeID_Width-1:QoS_Value_Width];
 assign flit_dec_o.src_id = flit_i[QoS_Value_Width+NodeID_Width+NodeID_Width-1:QoS_Value_Width+NodeID_Width];
 assign flit_dec_o.txn_id = flit_i[QoS_Value_Width+NodeID_Width+NodeID_Width+TxnID_Width-1:QoS_Value_Width+NodeID_Width+NodeID_Width];
+assign flit_dec_o.look_ahead_routing = flit_look_ahead_routing_i;
 endmodule

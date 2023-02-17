@@ -1,0 +1,7 @@
+module hehe (
+	node_id_t,
+	flit_dec_t
+);
+	input wire node_id_t;
+	output wire flit_dec_t;
+endmodule

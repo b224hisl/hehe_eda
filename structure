@@ -1,0 +1,16 @@
+vnet_router
+    input_port
+        input_port_flit_decoder
+        input_port_vc
+            onehot_mux
+            mp_fifo
+                usage_manager
+    sa_local
+    sa_global
+    onehot_mux
+    look_ahead_routing
+    output_port_vc_credit_counter
+    output_port_vc_selection
+    input_to_output ?
+    switch 
+    performance monitor
