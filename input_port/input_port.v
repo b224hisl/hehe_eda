@@ -20,88 +20,7 @@ module input_port_flit_decoder_4FC44 (
 	assign flit_dec_o[18-:12] = flit_i[29:18];
 	assign flit_dec_o[6-:3] = flit_look_ahead_routing_i;
 endmodule
-module input_port (
-	rx_flit_pend_i,
-	rx_flit_v_i,
-	rx_flit_i,
-	rx_flit_vc_id_i,
-	rx_flit_look_ahead_routing_i,
-	rx_lcrd_v_o,
-	rx_lcrd_id_o,
-	vc_ctrl_head_vld_o,
-	vc_ctrl_head_o,
-	vc_data_head_o,
-	inport_read_enable_sa_stage_i,
-	inport_read_vc_id_sa_stage_i,
-	inport_read_enable_st_stage_i,
-	inport_read_vc_id_st_stage_i,
-	node_id_x_ths_hop_i,
-	node_id_y_ths_hop_i,
-	clk,
-	rstn
-);
-	parameter VC_NUM = 1;
-	parameter VC_DEPTH = 1;
-	parameter VC_NUM_IDX_W = (VC_NUM > 1 ? $clog2(VC_NUM) : 1);
-	parameter INPUT_PORT_NO = 0;
-	input wire rx_flit_pend_i;
-	input wire rx_flit_v_i;
-	input wire [255:0] rx_flit_i;
-	input wire [VC_NUM_IDX_W - 1:0] rx_flit_vc_id_i;
-	input wire [2:0] rx_flit_look_ahead_routing_i;
-	output wire rx_lcrd_v_o;
-	localparam rvh_noc_pkg_CHANNEL_NUM = 4;
-	localparam rvh_noc_pkg_INPUT_PORT_NUMBER = 6;
-	localparam rvh_noc_pkg_ROUTER_PORT_NUMBER = 4;
-	localparam rvh_noc_pkg_LOCAL_PORT_NUMBER = 2;
-	localparam rvh_noc_pkg_QOS_VC_NUM_PER_INPUT = 1;
-	localparam rvh_noc_pkg_VC_ID_NUM_MAX = 6;
-	localparam rvh_noc_pkg_VC_ID_NUM_MAX_W = 3;
-	output wire [2:0] rx_lcrd_id_o;
-	output wire [VC_NUM - 1:0] vc_ctrl_head_vld_o;
-	localparam rvh_noc_pkg_QoS_Value_Width = 4;
-	localparam rvh_noc_pkg_TxnID_Width = 12;
-	localparam rvh_noc_pkg_NodeID_Device_Port_Width = 2;
-	localparam rvh_noc_pkg_NodeID_X_Width = 2;
-	localparam rvh_noc_pkg_NodeID_Y_Width = 2;
-	output wire [(VC_NUM * 33) - 1:0] vc_ctrl_head_o;
-	output wire [(VC_NUM * 256) - 1:0] vc_data_head_o;
-	input wire inport_read_enable_sa_stage_i;
-	input wire [VC_NUM_IDX_W - 1:0] inport_read_vc_id_sa_stage_i;
-	input wire inport_read_enable_st_stage_i;
-	input wire [VC_NUM_IDX_W - 1:0] inport_read_vc_id_st_stage_i;
-	input wire [1:0] node_id_x_ths_hop_i;
-	input wire [1:0] node_id_y_ths_hop_i;
-	input wire clk;
-	input wire rstn;
-	wire [32:0] flit_ctrl_info;
-	input_port_flit_decoder_4FC44 input_port_flit_decoder_u(
-		.flit_v_i(rx_flit_v_i),
-		.flit_i(rx_flit_i),
-		.flit_look_ahead_routing_i(rx_flit_look_ahead_routing_i),
-		.flit_dec_o(flit_ctrl_info)
-	);
-	input_port_vc_E2879 #(
-		.VC_NUM(VC_NUM),
-		.VC_DEPTH(VC_DEPTH)
-	) input_port_vc_u(
-		.flit_v_i(rx_flit_v_i),
-		.flit_i(rx_flit_i),
-		.flit_dec_i(flit_ctrl_info),
-		.flit_vc_id_i(rx_flit_vc_id_i),
-		.lcrd_v_o(rx_lcrd_v_o),
-		.lcrd_id_o(rx_lcrd_id_o),
-		.vc_ctrl_head_vld_o(vc_ctrl_head_vld_o),
-		.vc_ctrl_head_o(vc_ctrl_head_o),
-		.vc_data_head_o(vc_data_head_o),
-		.inport_read_enable_sa_stage_i(inport_read_enable_sa_stage_i),
-		.inport_read_vc_id_sa_stage_i(inport_read_vc_id_sa_stage_i),
-		.inport_read_enable_st_stage_i(inport_read_enable_st_stage_i),
-		.inport_read_vc_id_st_stage_i(inport_read_vc_id_st_stage_i),
-		.clk(clk),
-		.rstn(rstn)
-	);
-endmodule
+
 module input_port_vc_E2879 (
 	flit_v_i,
 	flit_i,
@@ -316,6 +235,7 @@ module mp_fifo_0F478_46EF5 (
 		.rst(rst)
 	);
 endmodule
+
 module mp_fifo_8192C (
 	enqueue_vld_i,
 	enqueue_payload_i,
@@ -418,4 +338,87 @@ module onehot_mux (
 			assign data_o[i] = |select_mat[i * SOURCE_COUNT+:SOURCE_COUNT];
 		end
 	endgenerate
+endmodule
+
+module input_port (
+	rx_flit_pend_i,
+	rx_flit_v_i,
+	rx_flit_i,
+	rx_flit_vc_id_i,
+	rx_flit_look_ahead_routing_i,
+	rx_lcrd_v_o,
+	rx_lcrd_id_o,
+	vc_ctrl_head_vld_o,
+	vc_ctrl_head_o,
+	vc_data_head_o,
+	inport_read_enable_sa_stage_i,
+	inport_read_vc_id_sa_stage_i,
+	inport_read_enable_st_stage_i,
+	inport_read_vc_id_st_stage_i,
+	node_id_x_ths_hop_i,
+	node_id_y_ths_hop_i,
+	clk,
+	rstn
+);
+	parameter VC_NUM = 1;
+	parameter VC_DEPTH = 1;
+	parameter VC_NUM_IDX_W = (VC_NUM > 1 ? $clog2(VC_NUM) : 1);
+	parameter INPUT_PORT_NO = 0;
+	input wire rx_flit_pend_i;
+	input wire rx_flit_v_i;
+	input wire [255:0] rx_flit_i;
+	input wire [VC_NUM_IDX_W - 1:0] rx_flit_vc_id_i;
+	input wire [2:0] rx_flit_look_ahead_routing_i;
+	output wire rx_lcrd_v_o;
+	localparam rvh_noc_pkg_CHANNEL_NUM = 4;
+	localparam rvh_noc_pkg_INPUT_PORT_NUMBER = 6;
+	localparam rvh_noc_pkg_ROUTER_PORT_NUMBER = 4;
+	localparam rvh_noc_pkg_LOCAL_PORT_NUMBER = 2;
+	localparam rvh_noc_pkg_QOS_VC_NUM_PER_INPUT = 1;
+	localparam rvh_noc_pkg_VC_ID_NUM_MAX = 6;
+	localparam rvh_noc_pkg_VC_ID_NUM_MAX_W = 3;
+	output wire [2:0] rx_lcrd_id_o;
+	output wire [VC_NUM - 1:0] vc_ctrl_head_vld_o;
+	localparam rvh_noc_pkg_QoS_Value_Width = 4;
+	localparam rvh_noc_pkg_TxnID_Width = 12;
+	localparam rvh_noc_pkg_NodeID_Device_Port_Width = 2;
+	localparam rvh_noc_pkg_NodeID_X_Width = 2;
+	localparam rvh_noc_pkg_NodeID_Y_Width = 2;
+	output wire [(VC_NUM * 33) - 1:0] vc_ctrl_head_o;
+	output wire [(VC_NUM * 256) - 1:0] vc_data_head_o;
+	input wire inport_read_enable_sa_stage_i;
+	input wire [VC_NUM_IDX_W - 1:0] inport_read_vc_id_sa_stage_i;
+	input wire inport_read_enable_st_stage_i;
+	input wire [VC_NUM_IDX_W - 1:0] inport_read_vc_id_st_stage_i;
+	input wire [1:0] node_id_x_ths_hop_i;
+	input wire [1:0] node_id_y_ths_hop_i;
+	input wire clk;
+	input wire rstn;
+	wire [32:0] flit_ctrl_info;
+	input_port_flit_decoder_4FC44 input_port_flit_decoder_u(
+		.flit_v_i(rx_flit_v_i),
+		.flit_i(rx_flit_i),
+		.flit_look_ahead_routing_i(rx_flit_look_ahead_routing_i),
+		.flit_dec_o(flit_ctrl_info)
+	);
+	input_port_vc_E2879 #(
+		.VC_NUM(VC_NUM),
+		.VC_DEPTH(VC_DEPTH)
+	) input_port_vc_u(
+		.flit_v_i(rx_flit_v_i),
+		.flit_i(rx_flit_i),
+		.flit_dec_i(flit_ctrl_info),
+		.flit_vc_id_i(rx_flit_vc_id_i),
+		.lcrd_v_o(rx_lcrd_v_o),
+		.lcrd_id_o(rx_lcrd_id_o),
+		.vc_ctrl_head_vld_o(vc_ctrl_head_vld_o),
+		.vc_ctrl_head_o(vc_ctrl_head_o),
+		.vc_data_head_o(vc_data_head_o),
+		.inport_read_enable_sa_stage_i(inport_read_enable_sa_stage_i),
+		.inport_read_vc_id_sa_stage_i(inport_read_vc_id_sa_stage_i),
+		.inport_read_enable_st_stage_i(inport_read_enable_st_stage_i),
+		.inport_read_vc_id_st_stage_i(inport_read_vc_id_st_stage_i),
+		.clk(clk),
+		.rstn(rstn)
+	);
 endmodule
