@@ -28,13 +28,29 @@ vnet_router
     look_ahead_routing
 
     output_port_vc_credit_counter
-        std_dffre
+        std_dffrve
 
     output_port_vc_selection
 
-    input_to_output ?
+    output_port_vc_assignment *
+        one_hot_mux
 
-    switch 
+    input_to_output
 
-    performance monitor
+    std_dffr
+
+    std_dffe
+
+    switch *
+        
+
+    performance_monitor *
         std_dffre
+
+    
+
+    
+
+
+
+    input_port_226D0

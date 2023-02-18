@@ -3,6 +3,7 @@ module switch (
 	vc_data_head_fromS_i,
 	vc_data_head_fromE_i,
 	vc_data_head_fromW_i,
+	vc_data_head_fromL_i,
 	inport_read_enable_st_stage_i,
 	inport_read_vc_id_st_stage_i,
 	outport_vld_st_stage_i,
@@ -32,6 +33,7 @@ module switch (
 	input wire [(VC_NUM_INPUT_S * 256) - 1:0] vc_data_head_fromS_i;
 	input wire [(VC_NUM_INPUT_E * 256) - 1:0] vc_data_head_fromE_i;
 	input wire [(VC_NUM_INPUT_W * 256) - 1:0] vc_data_head_fromW_i;
+	input wire [((LOCAL_PORT_NUM * VC_NUM_INPUT_L) * 256) - 1:0] vc_data_head_fromL_i;
 	input wire [INPUT_PORT_NUM - 1:0] inport_read_enable_st_stage_i;
 	localparam rvh_noc_pkg_CHANNEL_NUM = 4;
 	localparam rvh_noc_pkg_INPUT_PORT_NUMBER = 6;
@@ -60,7 +62,7 @@ module switch (
 	generate
 		if (LOCAL_PORT_NUM > 0) begin : gen_have_vc_data_head_fromL_i
 			for (i = 0; i < LOCAL_PORT_NUM; i = i + 1) begin : gen_vc_data_head_fromL_i
-				assign vc_head_data[(4 + i) * 256+:256] = vc_data_head_fromL_i[i][inport_read_vc_id_st_stage_i[((4 + i) * 3) + (VC_NUM_INPUT_L_IDX_W - 1)-:VC_NUM_INPUT_L_IDX_W]];
+				assign vc_head_data[(4 + i) * 256+:256] = vc_data_head_fromL_i[((i * VC_NUM_INPUT_L) + inport_read_vc_id_st_stage_i[((4 + i) * 3) + (VC_NUM_INPUT_L_IDX_W - 1)-:VC_NUM_INPUT_L_IDX_W]) * 256+:256];
 			end
 		end
 	endgenerate

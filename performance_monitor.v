@@ -5,6 +5,7 @@ module performance_monitor (
 	vc_credit_counter_toS_i,
 	vc_credit_counter_toE_i,
 	vc_credit_counter_toW_i,
+	vc_credit_counter_toL_i,
 	node_id_x_ths_hop_i,
 	node_id_y_ths_hop_i,
 	clk,
@@ -34,6 +35,7 @@ module performance_monitor (
 	input wire [(VC_NUM_INPUT_S * VC_DEPTH_INPUT_S_COUNTER_W) - 1:0] vc_credit_counter_toS_i;
 	input wire [(VC_NUM_INPUT_E * VC_DEPTH_INPUT_E_COUNTER_W) - 1:0] vc_credit_counter_toE_i;
 	input wire [(VC_NUM_INPUT_W * VC_DEPTH_INPUT_W_COUNTER_W) - 1:0] vc_credit_counter_toW_i;
+	input wire [((LOCAL_PORT_NUM * VC_NUM_INPUT_L) * VC_DEPTH_INPUT_L_COUNTER_W) - 1:0] vc_credit_counter_toL_i;
 	localparam rvh_noc_pkg_NodeID_X_Width = 2;
 	input wire [1:0] node_id_x_ths_hop_i;
 	localparam rvh_noc_pkg_NodeID_Y_Width = 2;
