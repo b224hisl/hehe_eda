@@ -1,3 +1,7 @@
-runs/
+vnet_router_3_macro/runs
+sa_global/runs
+sa_local/runs
+input_port/runs
+vnet_router_all/runs
 bin/
 conda-env/

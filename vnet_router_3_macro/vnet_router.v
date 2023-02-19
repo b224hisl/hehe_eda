@@ -1,235 +1,3 @@
-// module onehot_mux (
-// 	sel_i,
-// 	data_i,
-// 	data_o
-// );
-// 	parameter [31:0] SOURCE_COUNT = 2;
-// 	parameter [31:0] DATA_WIDTH = 1;
-// 	input wire [SOURCE_COUNT - 1:0] sel_i;
-// 	input wire [(SOURCE_COUNT * DATA_WIDTH) - 1:0] data_i;
-// 	output wire [DATA_WIDTH - 1:0] data_o;
-// 	wire [(DATA_WIDTH * SOURCE_COUNT) - 1:0] trans_data;
-// 	wire [(DATA_WIDTH * SOURCE_COUNT) - 1:0] select_mat;
-// 	genvar i;
-// 	generate
-// 		for (i = 0; i < DATA_WIDTH; i = i + 1) begin : genblk1
-// 			genvar j;
-// 			for (j = 0; j < SOURCE_COUNT; j = j + 1) begin : genblk1
-// 				assign trans_data[(i * SOURCE_COUNT) + j] = data_i[(j * DATA_WIDTH) + i];
-// 			end
-// 		end
-// 		for (i = 0; i < DATA_WIDTH; i = i + 1) begin : genblk2
-// 			assign select_mat[i * SOURCE_COUNT+:SOURCE_COUNT] = trans_data[i * SOURCE_COUNT+:SOURCE_COUNT] & sel_i;
-// 			assign data_o[i] = |select_mat[i * SOURCE_COUNT+:SOURCE_COUNT];
-// 		end
-// 	endgenerate
-// endmodule
-module look_ahead_routing (
-	vc_ctrl_head_vld_i,
-	vc_ctrl_head_i,
-	node_id_x_ths_hop_i,
-	node_id_y_ths_hop_i,
-	look_ahead_routing_o
-);
-	input wire vc_ctrl_head_vld_i;
-	localparam rvh_noc_pkg_QoS_Value_Width = 4;
-	localparam rvh_noc_pkg_TxnID_Width = 12;
-	localparam rvh_noc_pkg_NodeID_Device_Port_Width = 2;
-	localparam rvh_noc_pkg_NodeID_X_Width = 2;
-	localparam rvh_noc_pkg_NodeID_Y_Width = 2;
-	input wire [32:0] vc_ctrl_head_i;
-	input wire [1:0] node_id_x_ths_hop_i;
-	input wire [1:0] node_id_y_ths_hop_i;
-	output reg [2:0] look_ahead_routing_o;
-	reg [1:0] node_id_x_nxt_hop;
-	wire [1:0] node_id_x_dst_hop;
-	reg [1:0] node_id_y_nxt_hop;
-	wire [1:0] node_id_y_dst_hop;
-	assign node_id_x_dst_hop = vc_ctrl_head_i[32-:2];
-	assign node_id_y_dst_hop = vc_ctrl_head_i[30-:2];
-	always @(*) begin
-		node_id_x_nxt_hop = node_id_x_ths_hop_i;
-		node_id_y_nxt_hop = node_id_y_ths_hop_i;
-		case (vc_ctrl_head_i[6-:3])
-			3'd0: node_id_y_nxt_hop = node_id_y_ths_hop_i + 1;
-			3'd1: node_id_y_nxt_hop = node_id_y_ths_hop_i - 1;
-			3'd2: node_id_x_nxt_hop = node_id_x_ths_hop_i + 1;
-			3'd3: node_id_x_nxt_hop = node_id_x_ths_hop_i - 1;
-			default:
-				;
-		endcase
-	end
-	wire x_nxt_equal_x_dst;
-	wire x_nxt_less_x_dst;
-	wire y_nxt_equal_y_dst;
-	wire y_nxt_less_y_dst;
-	assign x_nxt_equal_x_dst = node_id_x_nxt_hop == node_id_x_dst_hop;
-	assign x_nxt_less_x_dst = node_id_x_nxt_hop < node_id_x_dst_hop;
-	assign y_nxt_equal_y_dst = node_id_y_nxt_hop == node_id_y_dst_hop;
-	assign y_nxt_less_y_dst = node_id_y_nxt_hop < node_id_y_dst_hop;
-	always @(*)
-		if (x_nxt_equal_x_dst) begin
-			if (y_nxt_equal_y_dst)
-				case (vc_ctrl_head_i[28-:2])
-					0: look_ahead_routing_o = 3'd4;
-					default: look_ahead_routing_o = 3'd4;
-				endcase
-			else if (y_nxt_less_y_dst)
-				look_ahead_routing_o = 3'd0;
-			else
-				look_ahead_routing_o = 3'd1;
-		end
-		else if (x_nxt_less_x_dst)
-			look_ahead_routing_o = 3'd2;
-		else
-			look_ahead_routing_o = 3'd3;
-endmodule
-module output_port_vc_credit_counter (
-	free_vc_credit_vld_i,
-	free_vc_credit_vc_id_i,
-	consume_vc_credit_vld_i,
-	consume_vc_credit_vc_id_i,
-	vc_credit_counter_o,
-	clk,
-	rstn
-);
-	parameter VC_NUM = 4;
-	parameter VC_NUM_IDX_W = (VC_NUM > 1 ? $clog2(VC_NUM) : 1);
-	parameter VC_DEPTH = 1;
-	parameter VC_DEPTH_COUNTER_W = $clog2(VC_DEPTH + 1);
-	input wire free_vc_credit_vld_i;
-	input wire [VC_NUM_IDX_W - 1:0] free_vc_credit_vc_id_i;
-	input wire consume_vc_credit_vld_i;
-	input wire [VC_NUM_IDX_W - 1:0] consume_vc_credit_vc_id_i;
-	output wire [(VC_NUM * VC_DEPTH_COUNTER_W) - 1:0] vc_credit_counter_o;
-	input wire clk;
-	input wire rstn;
-	genvar i;
-	reg [(VC_NUM * VC_DEPTH_COUNTER_W) - 1:0] vc_credit_counter_d;
-	wire [(VC_NUM * VC_DEPTH_COUNTER_W) - 1:0] vc_credit_counter_q;
-	wire [(VC_NUM * VC_DEPTH_COUNTER_W) - 1:0] vc_credit_counter_q_plus1;
-	wire [(VC_NUM * VC_DEPTH_COUNTER_W) - 1:0] vc_credit_counter_q_minus1;
-	reg [VC_NUM - 1:0] vc_credit_counter_ena;
-	wire [VC_NUM - 1:0] free_vc_credit_vc_id_hit;
-	wire [VC_NUM - 1:0] consume_vc_credit_vc_id_hit;
-	generate
-		for (i = 0; i < VC_NUM; i = i + 1) begin : gen_vc_credit_vc_id_hit
-			assign free_vc_credit_vc_id_hit[i] = free_vc_credit_vld_i & (free_vc_credit_vc_id_i == i[VC_NUM_IDX_W - 1:0]);
-			assign consume_vc_credit_vc_id_hit[i] = consume_vc_credit_vld_i & (consume_vc_credit_vc_id_i == i[VC_NUM_IDX_W - 1:0]);
-		end
-		for (i = 0; i < VC_NUM; i = i + 1) begin : gen_vc_credit_counter_q_plus1
-			assign vc_credit_counter_q_plus1[i * VC_DEPTH_COUNTER_W+:VC_DEPTH_COUNTER_W] = vc_credit_counter_q[i * VC_DEPTH_COUNTER_W+:VC_DEPTH_COUNTER_W] + 1;
-		end
-		for (i = 0; i < VC_NUM; i = i + 1) begin : gen_vc_credit_counter_q_minus1
-			assign vc_credit_counter_q_minus1[i * VC_DEPTH_COUNTER_W+:VC_DEPTH_COUNTER_W] = vc_credit_counter_q[i * VC_DEPTH_COUNTER_W+:VC_DEPTH_COUNTER_W] - 1;
-		end
-		for (i = 0; i < VC_NUM; i = i + 1) begin : gen_vc_credit_counter_d
-			always @(*) begin
-				vc_credit_counter_d[i * VC_DEPTH_COUNTER_W+:VC_DEPTH_COUNTER_W] = vc_credit_counter_q[i * VC_DEPTH_COUNTER_W+:VC_DEPTH_COUNTER_W];
-				vc_credit_counter_ena[i] = 1'b0;
-				if (free_vc_credit_vc_id_hit[i] & ~consume_vc_credit_vc_id_hit[i]) begin
-					vc_credit_counter_d[i * VC_DEPTH_COUNTER_W+:VC_DEPTH_COUNTER_W] = vc_credit_counter_q_plus1[i * VC_DEPTH_COUNTER_W+:VC_DEPTH_COUNTER_W];
-					vc_credit_counter_ena[i] = 1'b1;
-				end
-				else if (~free_vc_credit_vc_id_hit[i] & consume_vc_credit_vc_id_hit[i]) begin
-					vc_credit_counter_d[i * VC_DEPTH_COUNTER_W+:VC_DEPTH_COUNTER_W] = vc_credit_counter_q_minus1[i * VC_DEPTH_COUNTER_W+:VC_DEPTH_COUNTER_W];
-					vc_credit_counter_ena[i] = 1'b1;
-				end
-			end
-		end
-		for (i = 0; i < VC_NUM; i = i + 1) begin : gen_vc_credit_counter_q
-			std_dffrve #(.WIDTH(VC_DEPTH_COUNTER_W)) U_DAT_VC_CREDIT_CONTER_REG(
-				.clk(clk),
-				.rstn(rstn),
-				.rst_val(VC_DEPTH[VC_DEPTH_COUNTER_W - 1:0]),
-				.en(vc_credit_counter_ena[i]),
-				.d(vc_credit_counter_d[i * VC_DEPTH_COUNTER_W+:VC_DEPTH_COUNTER_W]),
-				.q(vc_credit_counter_q[i * VC_DEPTH_COUNTER_W+:VC_DEPTH_COUNTER_W])
-			);
-		end
-	endgenerate
-	assign vc_credit_counter_o = vc_credit_counter_q;
-endmodule
-module output_port_vc_selection (
-	vc_credit_counter_i,
-	vc_select_vld_o,
-	vc_select_vc_id_o
-);
-	parameter OUTPUT_VC_NUM = 4;
-	parameter OUTPUT_VC_NUM_IDX_W = (OUTPUT_VC_NUM > 1 ? $clog2(OUTPUT_VC_NUM) : 1);
-	parameter OUTPUT_VC_DEPTH = 1;
-	parameter OUTPUT_VC_DEPTH_IDX_W = $clog2(OUTPUT_VC_DEPTH + 1);
-	parameter OUTPUT_TO_L = 0;
-	input wire [(OUTPUT_VC_NUM * OUTPUT_VC_DEPTH_IDX_W) - 1:0] vc_credit_counter_i;
-	output reg [(OUTPUT_VC_NUM * 2) - 1:0] vc_select_vld_o;
-	localparam rvh_noc_pkg_CHANNEL_NUM = 4;
-	localparam rvh_noc_pkg_INPUT_PORT_NUMBER = 6;
-	localparam rvh_noc_pkg_ROUTER_PORT_NUMBER = 4;
-	localparam rvh_noc_pkg_LOCAL_PORT_NUMBER = 2;
-	localparam rvh_noc_pkg_QOS_VC_NUM_PER_INPUT = 1;
-	localparam rvh_noc_pkg_VC_ID_NUM_MAX = 6;
-	localparam rvh_noc_pkg_VC_ID_NUM_MAX_W = 3;
-	output reg [(OUTPUT_VC_NUM * 6) - 1:0] vc_select_vc_id_o;
-	genvar i;
-	wire [OUTPUT_VC_NUM - 1:0] vc_credit_counter_not_empty;
-	generate
-		for (i = 0; i < OUTPUT_VC_NUM; i = i + 1) begin : genblk1
-			assign vc_credit_counter_not_empty[i] = |vc_credit_counter_i[i * OUTPUT_VC_DEPTH_IDX_W+:OUTPUT_VC_DEPTH_IDX_W];
-		end
-		if (!OUTPUT_TO_L) begin : genblk2
-			always @(*) begin : comb_common_vc_id
-				begin : sv2v_autoblock_1
-					reg signed [31:0] i;
-					for (i = rvh_noc_pkg_QOS_VC_NUM_PER_INPUT; i < OUTPUT_VC_NUM; i = i + 1)
-						begin
-							vc_select_vld_o[(i * 2) + 1] = 1'sb0;
-							vc_select_vc_id_o[(i * 6) + 5-:3] = 1'sb0;
-							vc_select_vld_o[i * 2] = 1'sb0;
-							vc_select_vc_id_o[(i * 6) + 2-:rvh_noc_pkg_VC_ID_NUM_MAX_W] = 1'sb0;
-							if (vc_credit_counter_not_empty[i]) begin
-								vc_select_vld_o[(i * 2) + 1] = 1'b1;
-								vc_select_vc_id_o[(i * 6) + 5-:3] = i[2:0];
-							end
-							else begin : sv2v_autoblock_2
-								reg signed [31:0] j;
-								for (j = rvh_noc_pkg_QOS_VC_NUM_PER_INPUT; j < OUTPUT_VC_NUM; j = j + 1)
-									if (j != i)
-										if (vc_credit_counter_not_empty[j]) begin
-											vc_select_vld_o[(i * 2) + 1] = 1'b1;
-											vc_select_vc_id_o[(i * 6) + 5-:3] = j[2:0];
-										end
-							end
-						end
-				end
-			end
-		end
-		else begin : genblk2
-			always @(*) begin : sv2v_autoblock_3
-				reg signed [31:0] i;
-				for (i = 0; i < OUTPUT_VC_NUM; i = i + 1)
-					begin
-						vc_select_vld_o[(i * 2) + 1] = 1'sb0;
-						vc_select_vc_id_o[(i * 6) + 5-:3] = 1'sb0;
-						vc_select_vld_o[i * 2] = 1'sb0;
-						vc_select_vc_id_o[(i * 6) + 2-:rvh_noc_pkg_VC_ID_NUM_MAX_W] = 1'sb0;
-						if (vc_credit_counter_not_empty[i]) begin
-							vc_select_vld_o[(i * 2) + 1] = 1'b1;
-							vc_select_vc_id_o[(i * 6) + 5-:3] = i[2:0];
-						end
-						else begin : sv2v_autoblock_4
-							reg signed [31:0] j;
-							for (j = 0; j < OUTPUT_VC_NUM; j = j + 1)
-								if (j != i)
-									if (vc_credit_counter_not_empty[j]) begin
-										vc_select_vld_o[(i * 2) + 1] = 1'b1;
-										vc_select_vc_id_o[(i * 6) + 5-:3] = j[2:0];
-									end
-						end
-					end
-			end
-		end
-	endgenerate
-endmodule
 module input_to_output (
 	sa_global_vld_i,
 	sa_global_inport_id_oh_i,
@@ -449,6 +217,861 @@ module input_to_output (
 		end
 	endgenerate
 endmodule
+module left_circular_rotate (
+	ori_vector_i,
+	req_left_rotate_num_i,
+	roteted_vector_o
+);
+	parameter N_INPUT = 2;
+	localparam [31:0] N_INPUT_WIDTH = (N_INPUT > 1 ? $clog2(N_INPUT) : 1);
+	input wire [N_INPUT - 1:0] ori_vector_i;
+	input wire [N_INPUT_WIDTH - 1:0] req_left_rotate_num_i;
+	output wire [N_INPUT - 1:0] roteted_vector_o;
+	wire [(N_INPUT * 2) - 1:0] ori_vector_mid;
+	assign ori_vector_mid = {ori_vector_i, ori_vector_i} << req_left_rotate_num_i;
+	assign roteted_vector_o = ori_vector_mid[(N_INPUT * 2) - 1-:N_INPUT];
+endmodule
+module look_ahead_routing (
+	vc_ctrl_head_vld_i,
+	vc_ctrl_head_i,
+	node_id_x_ths_hop_i,
+	node_id_y_ths_hop_i,
+	look_ahead_routing_o
+);
+	input wire vc_ctrl_head_vld_i;
+	localparam rvh_noc_pkg_QoS_Value_Width = 4;
+	localparam rvh_noc_pkg_TxnID_Width = 12;
+	localparam rvh_noc_pkg_NodeID_Device_Port_Width = 2;
+	localparam rvh_noc_pkg_NodeID_X_Width = 2;
+	localparam rvh_noc_pkg_NodeID_Y_Width = 2;
+	input wire [32:0] vc_ctrl_head_i;
+	input wire [1:0] node_id_x_ths_hop_i;
+	input wire [1:0] node_id_y_ths_hop_i;
+	output reg [2:0] look_ahead_routing_o;
+	reg [1:0] node_id_x_nxt_hop;
+	wire [1:0] node_id_x_dst_hop;
+	reg [1:0] node_id_y_nxt_hop;
+	wire [1:0] node_id_y_dst_hop;
+	assign node_id_x_dst_hop = vc_ctrl_head_i[32-:2];
+	assign node_id_y_dst_hop = vc_ctrl_head_i[30-:2];
+	always @(*) begin
+		node_id_x_nxt_hop = node_id_x_ths_hop_i;
+		node_id_y_nxt_hop = node_id_y_ths_hop_i;
+		case (vc_ctrl_head_i[6-:3])
+			3'd0: node_id_y_nxt_hop = node_id_y_ths_hop_i + 1;
+			3'd1: node_id_y_nxt_hop = node_id_y_ths_hop_i - 1;
+			3'd2: node_id_x_nxt_hop = node_id_x_ths_hop_i + 1;
+			3'd3: node_id_x_nxt_hop = node_id_x_ths_hop_i - 1;
+			default:
+				;
+		endcase
+	end
+	wire x_nxt_equal_x_dst;
+	wire x_nxt_less_x_dst;
+	wire y_nxt_equal_y_dst;
+	wire y_nxt_less_y_dst;
+	assign x_nxt_equal_x_dst = node_id_x_nxt_hop == node_id_x_dst_hop;
+	assign x_nxt_less_x_dst = node_id_x_nxt_hop < node_id_x_dst_hop;
+	assign y_nxt_equal_y_dst = node_id_y_nxt_hop == node_id_y_dst_hop;
+	assign y_nxt_less_y_dst = node_id_y_nxt_hop < node_id_y_dst_hop;
+	always @(*)
+		if (x_nxt_equal_x_dst) begin
+			if (y_nxt_equal_y_dst)
+				case (vc_ctrl_head_i[28-:2])
+					0: look_ahead_routing_o = 3'd4;
+					default: look_ahead_routing_o = 3'd4;
+				endcase
+			else if (y_nxt_less_y_dst)
+				look_ahead_routing_o = 3'd0;
+			else
+				look_ahead_routing_o = 3'd1;
+		end
+		else if (x_nxt_less_x_dst)
+			look_ahead_routing_o = 3'd2;
+		else
+			look_ahead_routing_o = 3'd3;
+endmodule
+module oh2idx (
+	oh_i,
+	idx_o
+);
+	parameter [31:0] N_INPUT = 2;
+	localparam [31:0] N_INPUT_WIDTH = (N_INPUT > 1 ? $clog2(N_INPUT) : 1);
+	input [N_INPUT - 1:0] oh_i;
+	output wire [N_INPUT_WIDTH - 1:0] idx_o;
+	genvar i;
+	genvar j;
+	wire [(N_INPUT_WIDTH * N_INPUT) - 1:0] mask;
+	generate
+		for (i = 0; i < N_INPUT_WIDTH; i = i + 1) begin : gen_mask_i
+			for (j = 0; j < N_INPUT; j = j + 1) begin : gen_mask_j
+				assign mask[(i * N_INPUT) + j] = (j / (2 ** i)) % 2;
+			end
+		end
+		for (i = 0; i < N_INPUT_WIDTH; i = i + 1) begin : gen_idx_o
+			assign idx_o[i] = |(oh_i & mask[i * N_INPUT+:N_INPUT]);
+		end
+	endgenerate
+endmodule
+module onehot_mux (
+	sel_i,
+	data_i,
+	data_o
+);
+	parameter [31:0] SOURCE_COUNT = 2;
+	parameter [31:0] DATA_WIDTH = 1;
+	input wire [SOURCE_COUNT - 1:0] sel_i;
+	input wire [(SOURCE_COUNT * DATA_WIDTH) - 1:0] data_i;
+	output wire [DATA_WIDTH - 1:0] data_o;
+	wire [(DATA_WIDTH * SOURCE_COUNT) - 1:0] trans_data;
+	wire [(DATA_WIDTH * SOURCE_COUNT) - 1:0] select_mat;
+	genvar i;
+	generate
+		for (i = 0; i < DATA_WIDTH; i = i + 1) begin : genblk1
+			genvar j;
+			for (j = 0; j < SOURCE_COUNT; j = j + 1) begin : genblk1
+				assign trans_data[(i * SOURCE_COUNT) + j] = data_i[(j * DATA_WIDTH) + i];
+			end
+		end
+		for (i = 0; i < DATA_WIDTH; i = i + 1) begin : genblk2
+			assign select_mat[i * SOURCE_COUNT+:SOURCE_COUNT] = trans_data[i * SOURCE_COUNT+:SOURCE_COUNT] & sel_i;
+			assign data_o[i] = |select_mat[i * SOURCE_COUNT+:SOURCE_COUNT];
+		end
+	endgenerate
+endmodule
+module one_hot_priority_encoder (
+	sel_i,
+	sel_o
+);
+	parameter [31:0] SEL_WIDTH = 8;
+	input wire [SEL_WIDTH - 1:0] sel_i;
+	output wire [SEL_WIDTH - 1:0] sel_o;
+	localparam [31:0] SEL_ID_WIDHT = $clog2(SEL_WIDTH);
+	wire [SEL_WIDTH - 1:0] sel_mask;
+	assign sel_mask = (~sel_i + 1'b1) & sel_i;
+	assign sel_o = sel_mask;
+endmodule
+module one_hot_rr_arb (
+	req_i,
+	update_i,
+	grt_o,
+	grt_idx_o,
+	rstn,
+	clk
+);
+	parameter N_INPUT = 2;
+	localparam [31:0] N_INPUT_WIDTH = (N_INPUT > 1 ? $clog2(N_INPUT) : 1);
+	localparam [31:0] IS_LOG2 = (2 ** N_INPUT_WIDTH) == N_INPUT;
+	parameter TIMEOUT_UPDATE_EN = 0;
+	parameter TIMEOUT_UPDATE_CYCLE = 10;
+	input wire [N_INPUT - 1:0] req_i;
+	input wire update_i;
+	output wire [N_INPUT - 1:0] grt_o;
+	output wire [N_INPUT_WIDTH - 1:0] grt_idx_o;
+	input wire rstn;
+	input wire clk;
+	reg [$clog2(TIMEOUT_UPDATE_CYCLE) - 1:0] timeout_counter_q;
+	wire [$clog2(TIMEOUT_UPDATE_CYCLE) - 1:0] timeout_counter_d;
+	wire timeout_counter_add;
+	wire timeout_counter_clr;
+	wire timeout_counter_en;
+	wire timeout_en;
+	generate
+		if (N_INPUT == 1) begin : gen_one_hot_rr_arb_one_input
+			assign grt_o = req_i;
+			assign grt_idx_o = 0;
+		end
+		else begin : gen_one_hot_rr_arb_common_input
+			wire req_vld;
+			wire [(N_INPUT * 2) - 1:0] reversed_dereordered_selected_req_pre_shift;
+			wire [(N_INPUT * 2) - 1:0] reversed_dereordered_selected_req_shift;
+			wire [N_INPUT - 1:0] reodered_req;
+			wire [N_INPUT - 1:0] reordered_selected_req;
+			wire [N_INPUT - 1:0] dereordered_selected_req;
+			wire [N_INPUT - 1:0] reversed_reordered_selected_req;
+			wire [N_INPUT - 1:0] reversed_dereordered_selected_req;
+			reg [N_INPUT_WIDTH - 1:0] round_ptr_q;
+			wire [N_INPUT_WIDTH - 1:0] round_ptr_d;
+			wire [N_INPUT_WIDTH - 1:0] round_ptr_q_comp;
+			wire [N_INPUT_WIDTH - 1:0] oh_to_idx;
+			wire [N_INPUT_WIDTH - 1:0] selected_req_idx;
+			assign req_vld = update_i | timeout_en;
+			always @(posedge clk or negedge rstn)
+				if (~rstn)
+					round_ptr_q <= 1'sb0;
+				else if (req_vld)
+					round_ptr_q <= round_ptr_d;
+			assign round_ptr_q_comp = N_INPUT - round_ptr_q;
+			left_circular_rotate #(.N_INPUT(N_INPUT)) left_circular_rotate_reodered_req_u(
+				.ori_vector_i(req_i),
+				.req_left_rotate_num_i(round_ptr_q),
+				.roteted_vector_o(reodered_req)
+			);
+			one_hot_priority_encoder #(.SEL_WIDTH(N_INPUT)) biased_one_hot_priority_encoder_u(
+				.sel_i(reodered_req),
+				.sel_o(reordered_selected_req)
+			);
+			left_circular_rotate #(.N_INPUT(N_INPUT)) left_circular_rotate_dereordered_selected_req_u(
+				.ori_vector_i(reordered_selected_req),
+				.req_left_rotate_num_i(round_ptr_q_comp),
+				.roteted_vector_o(dereordered_selected_req)
+			);
+			oh2idx #(.N_INPUT(N_INPUT)) oh2idx_u(
+				.oh_i(dereordered_selected_req),
+				.idx_o(oh_to_idx)
+			);
+			assign selected_req_idx = oh_to_idx[N_INPUT_WIDTH - 1:0];
+			assign round_ptr_d = (selected_req_idx == {N_INPUT_WIDTH {1'sb0}} ? N_INPUT - 1 : (selected_req_idx == (N_INPUT - 1) ? {N_INPUT_WIDTH {1'sb0}} : (N_INPUT - 1) - selected_req_idx));
+			assign grt_o = dereordered_selected_req;
+			assign grt_idx_o = selected_req_idx;
+			if (TIMEOUT_UPDATE_EN) begin : genblk1
+				assign timeout_counter_add = |req_i & ~req_vld;
+				assign timeout_counter_clr = req_vld;
+				assign timeout_counter_d = (timeout_counter_clr ? {$clog2(TIMEOUT_UPDATE_CYCLE) {1'sb0}} : timeout_counter_q + 1);
+				assign timeout_counter_en = timeout_counter_add | (timeout_counter_clr & (timeout_counter_q != {$clog2(TIMEOUT_UPDATE_CYCLE) {1'sb0}}));
+				always @(posedge clk or negedge rstn)
+					if (~rstn)
+						timeout_counter_q <= 1'sb0;
+					else if (timeout_counter_en)
+						timeout_counter_q <= timeout_counter_d;
+				assign timeout_en = timeout_counter_q == TIMEOUT_UPDATE_CYCLE;
+			end
+			else begin : genblk1
+				assign timeout_en = 1'sb0;
+			end
+		end
+	endgenerate
+endmodule
+module output_port_vc_assignment (
+	sa_global_vld_i,
+	sa_global_qos_value_i,
+	sa_global_inport_id_oh_i,
+	look_ahead_routing_i,
+	vc_select_vld_i,
+	vc_select_vc_id_i,
+	vc_assignment_vld_o,
+	vc_assignment_vc_id_o,
+	look_ahead_routing_sel_o
+);
+	parameter OUTPUT_VC_NUM = 4;
+	parameter OUTPUT_VC_NUM_IDX_W = (OUTPUT_VC_NUM > 1 ? $clog2(OUTPUT_VC_NUM) : 1);
+	parameter SA_GLOBAL_INPUT_NUM = 4;
+	parameter SA_GLOBAL_INPUT_NUM_IDX_W = (SA_GLOBAL_INPUT_NUM > 1 ? $clog2(SA_GLOBAL_INPUT_NUM) : 1);
+	parameter OUTPUT_TO_N = 0;
+	parameter OUTPUT_TO_S = 0;
+	parameter OUTPUT_TO_E = 0;
+	parameter OUTPUT_TO_W = 0;
+	parameter OUTPUT_TO_L = 0;
+	input wire sa_global_vld_i;
+	localparam rvh_noc_pkg_QoS_Value_Width = 4;
+	input wire [3:0] sa_global_qos_value_i;
+	input wire [SA_GLOBAL_INPUT_NUM - 1:0] sa_global_inport_id_oh_i;
+	input wire [(SA_GLOBAL_INPUT_NUM * 3) - 1:0] look_ahead_routing_i;
+	input wire [(OUTPUT_VC_NUM * 2) - 1:0] vc_select_vld_i;
+	localparam rvh_noc_pkg_CHANNEL_NUM = 4;
+	localparam rvh_noc_pkg_INPUT_PORT_NUMBER = 6;
+	localparam rvh_noc_pkg_ROUTER_PORT_NUMBER = 4;
+	localparam rvh_noc_pkg_LOCAL_PORT_NUMBER = 2;
+	localparam rvh_noc_pkg_QOS_VC_NUM_PER_INPUT = 1;
+	localparam rvh_noc_pkg_VC_ID_NUM_MAX = 6;
+	localparam rvh_noc_pkg_VC_ID_NUM_MAX_W = 3;
+	input wire [(OUTPUT_VC_NUM * 6) - 1:0] vc_select_vc_id_i;
+	output reg vc_assignment_vld_o;
+	output reg [2:0] vc_assignment_vc_id_o;
+	output wire [2:0] look_ahead_routing_sel_o;
+	genvar i;
+	wire [2:0] look_ahead_routing_sel;
+	onehot_mux #(
+		.SOURCE_COUNT(SA_GLOBAL_INPUT_NUM),
+		.DATA_WIDTH(3)
+	) onehot_mux_look_ahead_routing_sel_u(
+		.sel_i(sa_global_inport_id_oh_i),
+		.data_i(look_ahead_routing_i),
+		.data_o(look_ahead_routing_sel)
+	);
+	assign look_ahead_routing_sel_o = look_ahead_routing_sel;
+	wire sa_global_sel_rt_vc_flit_en;
+	wire [(OUTPUT_VC_NUM - rvh_noc_pkg_QOS_VC_NUM_PER_INPUT) - 1:0] vc_select_vld;
+	wire [((OUTPUT_VC_NUM - rvh_noc_pkg_QOS_VC_NUM_PER_INPUT) * 3) - 1:0] vc_select_vc_id;
+	assign sa_global_sel_rt_vc_flit_en = 1'sb0;
+	generate
+		for (i = 0; i < (OUTPUT_VC_NUM - rvh_noc_pkg_QOS_VC_NUM_PER_INPUT); i = i + 1) begin : gen_vc_select_vld
+			assign vc_select_vld[i] = (sa_global_sel_rt_vc_flit_en ? vc_select_vld_i[0] : vc_select_vld_i[((i + rvh_noc_pkg_QOS_VC_NUM_PER_INPUT) * 2) + 1]);
+		end
+		for (i = 0; i < (OUTPUT_VC_NUM - rvh_noc_pkg_QOS_VC_NUM_PER_INPUT); i = i + 1) begin : gen_vc_select_vc_id
+			assign vc_select_vc_id[i * 3+:3] = (sa_global_sel_rt_vc_flit_en ? vc_select_vc_id_i[2-:rvh_noc_pkg_VC_ID_NUM_MAX_W] : vc_select_vc_id_i[((i + rvh_noc_pkg_QOS_VC_NUM_PER_INPUT) * 6) + 5-:3]);
+		end
+		if (OUTPUT_TO_N) begin : gen_output_to_n
+			always @(*) begin
+				vc_assignment_vld_o = 1'b0;
+				vc_assignment_vc_id_o = 1'sb0;
+				case (look_ahead_routing_sel)
+					3'd0: begin
+						vc_assignment_vld_o = vc_select_vld[0];
+						vc_assignment_vc_id_o = vc_select_vc_id[0+:3];
+					end
+					3'd4: begin
+						vc_assignment_vld_o = vc_select_vld[1];
+						vc_assignment_vc_id_o = vc_select_vc_id[3+:3];
+					end
+					default:
+						;
+				endcase
+			end
+		end
+		if (OUTPUT_TO_S) begin : gen_output_to_s
+			always @(*) begin
+				vc_assignment_vld_o = 1'b0;
+				vc_assignment_vc_id_o = 1'sb0;
+				case (look_ahead_routing_sel)
+					3'd1: begin
+						vc_assignment_vld_o = vc_select_vld[0];
+						vc_assignment_vc_id_o = vc_select_vc_id[0+:3];
+					end
+					3'd4: begin
+						vc_assignment_vld_o = vc_select_vld[1];
+						vc_assignment_vc_id_o = vc_select_vc_id[3+:3];
+					end
+					default:
+						;
+				endcase
+			end
+		end
+		if (OUTPUT_TO_E) begin : gen_output_to_e
+			always @(*) begin
+				vc_assignment_vld_o = 1'b0;
+				vc_assignment_vc_id_o = 1'sb0;
+				case (look_ahead_routing_sel)
+					3'd0: begin
+						vc_assignment_vld_o = vc_select_vld[0];
+						vc_assignment_vc_id_o = vc_select_vc_id[0+:3];
+					end
+					3'd1: begin
+						vc_assignment_vld_o = vc_select_vld[1];
+						vc_assignment_vc_id_o = vc_select_vc_id[3+:3];
+					end
+					3'd2: begin
+						vc_assignment_vld_o = vc_select_vld[2];
+						vc_assignment_vc_id_o = vc_select_vc_id[6+:3];
+					end
+					3'd4: begin
+						vc_assignment_vld_o = vc_select_vld[3];
+						vc_assignment_vc_id_o = vc_select_vc_id[9+:3];
+					end
+					default:
+						;
+				endcase
+			end
+		end
+		if (OUTPUT_TO_W) begin : gen_output_to_w
+			always @(*) begin
+				vc_assignment_vld_o = 1'b0;
+				vc_assignment_vc_id_o = 1'sb0;
+				case (look_ahead_routing_sel)
+					3'd0: begin
+						vc_assignment_vld_o = vc_select_vld[0];
+						vc_assignment_vc_id_o = vc_select_vc_id[0+:3];
+					end
+					3'd1: begin
+						vc_assignment_vld_o = vc_select_vld[1];
+						vc_assignment_vc_id_o = vc_select_vc_id[3+:3];
+					end
+					3'd3: begin
+						vc_assignment_vld_o = vc_select_vld[2];
+						vc_assignment_vc_id_o = vc_select_vc_id[6+:3];
+					end
+					3'd4: begin
+						vc_assignment_vld_o = vc_select_vld[3];
+						vc_assignment_vc_id_o = vc_select_vc_id[9+:3];
+					end
+					default:
+						;
+				endcase
+			end
+		end
+		if (OUTPUT_TO_L) begin : gen_output_to_l
+			always @(*) begin
+				vc_assignment_vld_o = 1'b0;
+				vc_assignment_vc_id_o = 1'sb0;
+				case (look_ahead_routing_sel)
+					default: begin
+						vc_assignment_vld_o = vc_select_vld_i[1];
+						vc_assignment_vc_id_o = vc_select_vc_id_i[5-:3];
+					end
+				endcase
+			end
+		end
+	endgenerate
+endmodule
+module output_port_vc_credit_counter (
+	free_vc_credit_vld_i,
+	free_vc_credit_vc_id_i,
+	consume_vc_credit_vld_i,
+	consume_vc_credit_vc_id_i,
+	vc_credit_counter_o,
+	clk,
+	rstn
+);
+	parameter VC_NUM = 4;
+	parameter VC_NUM_IDX_W = (VC_NUM > 1 ? $clog2(VC_NUM) : 1);
+	parameter VC_DEPTH = 1;
+	parameter VC_DEPTH_COUNTER_W = $clog2(VC_DEPTH + 1);
+	input wire free_vc_credit_vld_i;
+	input wire [VC_NUM_IDX_W - 1:0] free_vc_credit_vc_id_i;
+	input wire consume_vc_credit_vld_i;
+	input wire [VC_NUM_IDX_W - 1:0] consume_vc_credit_vc_id_i;
+	output wire [(VC_NUM * VC_DEPTH_COUNTER_W) - 1:0] vc_credit_counter_o;
+	input wire clk;
+	input wire rstn;
+	genvar i;
+	reg [(VC_NUM * VC_DEPTH_COUNTER_W) - 1:0] vc_credit_counter_d;
+	wire [(VC_NUM * VC_DEPTH_COUNTER_W) - 1:0] vc_credit_counter_q;
+	wire [(VC_NUM * VC_DEPTH_COUNTER_W) - 1:0] vc_credit_counter_q_plus1;
+	wire [(VC_NUM * VC_DEPTH_COUNTER_W) - 1:0] vc_credit_counter_q_minus1;
+	reg [VC_NUM - 1:0] vc_credit_counter_ena;
+	wire [VC_NUM - 1:0] free_vc_credit_vc_id_hit;
+	wire [VC_NUM - 1:0] consume_vc_credit_vc_id_hit;
+	generate
+		for (i = 0; i < VC_NUM; i = i + 1) begin : gen_vc_credit_vc_id_hit
+			assign free_vc_credit_vc_id_hit[i] = free_vc_credit_vld_i & (free_vc_credit_vc_id_i == i[VC_NUM_IDX_W - 1:0]);
+			assign consume_vc_credit_vc_id_hit[i] = consume_vc_credit_vld_i & (consume_vc_credit_vc_id_i == i[VC_NUM_IDX_W - 1:0]);
+		end
+		for (i = 0; i < VC_NUM; i = i + 1) begin : gen_vc_credit_counter_q_plus1
+			assign vc_credit_counter_q_plus1[i * VC_DEPTH_COUNTER_W+:VC_DEPTH_COUNTER_W] = vc_credit_counter_q[i * VC_DEPTH_COUNTER_W+:VC_DEPTH_COUNTER_W] + 1;
+		end
+		for (i = 0; i < VC_NUM; i = i + 1) begin : gen_vc_credit_counter_q_minus1
+			assign vc_credit_counter_q_minus1[i * VC_DEPTH_COUNTER_W+:VC_DEPTH_COUNTER_W] = vc_credit_counter_q[i * VC_DEPTH_COUNTER_W+:VC_DEPTH_COUNTER_W] - 1;
+		end
+		for (i = 0; i < VC_NUM; i = i + 1) begin : gen_vc_credit_counter_d
+			always @(*) begin
+				vc_credit_counter_d[i * VC_DEPTH_COUNTER_W+:VC_DEPTH_COUNTER_W] = vc_credit_counter_q[i * VC_DEPTH_COUNTER_W+:VC_DEPTH_COUNTER_W];
+				vc_credit_counter_ena[i] = 1'b0;
+				if (free_vc_credit_vc_id_hit[i] & ~consume_vc_credit_vc_id_hit[i]) begin
+					vc_credit_counter_d[i * VC_DEPTH_COUNTER_W+:VC_DEPTH_COUNTER_W] = vc_credit_counter_q_plus1[i * VC_DEPTH_COUNTER_W+:VC_DEPTH_COUNTER_W];
+					vc_credit_counter_ena[i] = 1'b1;
+				end
+				else if (~free_vc_credit_vc_id_hit[i] & consume_vc_credit_vc_id_hit[i]) begin
+					vc_credit_counter_d[i * VC_DEPTH_COUNTER_W+:VC_DEPTH_COUNTER_W] = vc_credit_counter_q_minus1[i * VC_DEPTH_COUNTER_W+:VC_DEPTH_COUNTER_W];
+					vc_credit_counter_ena[i] = 1'b1;
+				end
+			end
+		end
+		for (i = 0; i < VC_NUM; i = i + 1) begin : gen_vc_credit_counter_q
+			std_dffrve #(.WIDTH(VC_DEPTH_COUNTER_W)) U_DAT_VC_CREDIT_CONTER_REG(
+				.clk(clk),
+				.rstn(rstn),
+				.rst_val(VC_DEPTH[VC_DEPTH_COUNTER_W - 1:0]),
+				.en(vc_credit_counter_ena[i]),
+				.d(vc_credit_counter_d[i * VC_DEPTH_COUNTER_W+:VC_DEPTH_COUNTER_W]),
+				.q(vc_credit_counter_q[i * VC_DEPTH_COUNTER_W+:VC_DEPTH_COUNTER_W])
+			);
+		end
+	endgenerate
+	assign vc_credit_counter_o = vc_credit_counter_q;
+endmodule
+module output_port_vc_selection (
+	vc_credit_counter_i,
+	vc_select_vld_o,
+	vc_select_vc_id_o
+);
+	parameter OUTPUT_VC_NUM = 4;
+	parameter OUTPUT_VC_NUM_IDX_W = (OUTPUT_VC_NUM > 1 ? $clog2(OUTPUT_VC_NUM) : 1);
+	parameter OUTPUT_VC_DEPTH = 1;
+	parameter OUTPUT_VC_DEPTH_IDX_W = $clog2(OUTPUT_VC_DEPTH + 1);
+	parameter OUTPUT_TO_L = 0;
+	input wire [(OUTPUT_VC_NUM * OUTPUT_VC_DEPTH_IDX_W) - 1:0] vc_credit_counter_i;
+	output reg [(OUTPUT_VC_NUM * 2) - 1:0] vc_select_vld_o;
+	localparam rvh_noc_pkg_CHANNEL_NUM = 4;
+	localparam rvh_noc_pkg_INPUT_PORT_NUMBER = 6;
+	localparam rvh_noc_pkg_ROUTER_PORT_NUMBER = 4;
+	localparam rvh_noc_pkg_LOCAL_PORT_NUMBER = 2;
+	localparam rvh_noc_pkg_QOS_VC_NUM_PER_INPUT = 1;
+	localparam rvh_noc_pkg_VC_ID_NUM_MAX = 6;
+	localparam rvh_noc_pkg_VC_ID_NUM_MAX_W = 3;
+	output reg [(OUTPUT_VC_NUM * 6) - 1:0] vc_select_vc_id_o;
+	genvar i;
+	wire [OUTPUT_VC_NUM - 1:0] vc_credit_counter_not_empty;
+	generate
+		for (i = 0; i < OUTPUT_VC_NUM; i = i + 1) begin : genblk1
+			assign vc_credit_counter_not_empty[i] = |vc_credit_counter_i[i * OUTPUT_VC_DEPTH_IDX_W+:OUTPUT_VC_DEPTH_IDX_W];
+		end
+		if (!OUTPUT_TO_L) begin : genblk2
+			always @(*) begin : comb_common_vc_id
+				begin : sv2v_autoblock_1
+					reg signed [31:0] i;
+					for (i = rvh_noc_pkg_QOS_VC_NUM_PER_INPUT; i < OUTPUT_VC_NUM; i = i + 1)
+						begin
+							vc_select_vld_o[(i * 2) + 1] = 1'sb0;
+							vc_select_vc_id_o[(i * 6) + 5-:3] = 1'sb0;
+							vc_select_vld_o[i * 2] = 1'sb0;
+							vc_select_vc_id_o[(i * 6) + 2-:rvh_noc_pkg_VC_ID_NUM_MAX_W] = 1'sb0;
+							if (vc_credit_counter_not_empty[i]) begin
+								vc_select_vld_o[(i * 2) + 1] = 1'b1;
+								vc_select_vc_id_o[(i * 6) + 5-:3] = i[2:0];
+							end
+							else begin : sv2v_autoblock_2
+								reg signed [31:0] j;
+								for (j = rvh_noc_pkg_QOS_VC_NUM_PER_INPUT; j < OUTPUT_VC_NUM; j = j + 1)
+									if (j != i)
+										if (vc_credit_counter_not_empty[j]) begin
+											vc_select_vld_o[(i * 2) + 1] = 1'b1;
+											vc_select_vc_id_o[(i * 6) + 5-:3] = j[2:0];
+										end
+							end
+						end
+				end
+			end
+		end
+		else begin : genblk2
+			always @(*) begin : sv2v_autoblock_3
+				reg signed [31:0] i;
+				for (i = 0; i < OUTPUT_VC_NUM; i = i + 1)
+					begin
+						vc_select_vld_o[(i * 2) + 1] = 1'sb0;
+						vc_select_vc_id_o[(i * 6) + 5-:3] = 1'sb0;
+						vc_select_vld_o[i * 2] = 1'sb0;
+						vc_select_vc_id_o[(i * 6) + 2-:rvh_noc_pkg_VC_ID_NUM_MAX_W] = 1'sb0;
+						if (vc_credit_counter_not_empty[i]) begin
+							vc_select_vld_o[(i * 2) + 1] = 1'b1;
+							vc_select_vc_id_o[(i * 6) + 5-:3] = i[2:0];
+						end
+						else begin : sv2v_autoblock_4
+							reg signed [31:0] j;
+							for (j = 0; j < OUTPUT_VC_NUM; j = j + 1)
+								if (j != i)
+									if (vc_credit_counter_not_empty[j]) begin
+										vc_select_vld_o[(i * 2) + 1] = 1'b1;
+										vc_select_vc_id_o[(i * 6) + 5-:3] = j[2:0];
+									end
+						end
+					end
+			end
+		end
+	endgenerate
+endmodule
+module performance_monitor (
+	sa_local_vld_i,
+	sa_global_inport_read_vld_i,
+	vc_credit_counter_toN_i,
+	vc_credit_counter_toS_i,
+	vc_credit_counter_toE_i,
+	vc_credit_counter_toW_i,
+	vc_credit_counter_toL_i,
+	node_id_x_ths_hop_i,
+	node_id_y_ths_hop_i,
+	clk,
+	rstn
+);
+	parameter INPUT_PORT_NUM = 5;
+	parameter OUTPUT_PORT_NUM = 5;
+	parameter LOCAL_PORT_NUM = INPUT_PORT_NUM - 4;
+	parameter VC_NUM_INPUT_N = 1 + LOCAL_PORT_NUM;
+	parameter VC_NUM_INPUT_S = 1 + LOCAL_PORT_NUM;
+	parameter VC_NUM_INPUT_E = 3 + LOCAL_PORT_NUM;
+	parameter VC_NUM_INPUT_W = 3 + LOCAL_PORT_NUM;
+	parameter VC_NUM_INPUT_L = 4;
+	parameter VC_DEPTH_INPUT_N = 2;
+	parameter VC_DEPTH_INPUT_S = 2;
+	parameter VC_DEPTH_INPUT_E = 2;
+	parameter VC_DEPTH_INPUT_W = 2;
+	parameter VC_DEPTH_INPUT_L = 2;
+	parameter VC_DEPTH_INPUT_N_COUNTER_W = $clog2(VC_DEPTH_INPUT_N + 1);
+	parameter VC_DEPTH_INPUT_S_COUNTER_W = $clog2(VC_DEPTH_INPUT_S + 1);
+	parameter VC_DEPTH_INPUT_E_COUNTER_W = $clog2(VC_DEPTH_INPUT_E + 1);
+	parameter VC_DEPTH_INPUT_W_COUNTER_W = $clog2(VC_DEPTH_INPUT_W + 1);
+	parameter VC_DEPTH_INPUT_L_COUNTER_W = $clog2(VC_DEPTH_INPUT_L + 1);
+	input wire [INPUT_PORT_NUM - 1:0] sa_local_vld_i;
+	input wire [INPUT_PORT_NUM - 1:0] sa_global_inport_read_vld_i;
+	input wire [(VC_NUM_INPUT_N * VC_DEPTH_INPUT_N_COUNTER_W) - 1:0] vc_credit_counter_toN_i;
+	input wire [(VC_NUM_INPUT_S * VC_DEPTH_INPUT_S_COUNTER_W) - 1:0] vc_credit_counter_toS_i;
+	input wire [(VC_NUM_INPUT_E * VC_DEPTH_INPUT_E_COUNTER_W) - 1:0] vc_credit_counter_toE_i;
+	input wire [(VC_NUM_INPUT_W * VC_DEPTH_INPUT_W_COUNTER_W) - 1:0] vc_credit_counter_toW_i;
+	input wire [((LOCAL_PORT_NUM * VC_NUM_INPUT_L) * VC_DEPTH_INPUT_L_COUNTER_W) - 1:0] vc_credit_counter_toL_i;
+	localparam rvh_noc_pkg_NodeID_X_Width = 2;
+	input wire [1:0] node_id_x_ths_hop_i;
+	localparam rvh_noc_pkg_NodeID_Y_Width = 2;
+	input wire [1:0] node_id_y_ths_hop_i;
+	input wire clk;
+	input wire rstn;
+	genvar i;
+	reg [(INPUT_PORT_NUM * 64) - 1:0] sa_local_vld_counter_d;
+	wire [(INPUT_PORT_NUM * 64) - 1:0] sa_local_vld_counter_q;
+	reg [INPUT_PORT_NUM - 1:0] sa_local_vld_counter_ena;
+	reg [(INPUT_PORT_NUM * 64) - 1:0] sa_global_inport_read_vld_counter_d;
+	wire [(INPUT_PORT_NUM * 64) - 1:0] sa_global_inport_read_vld_counter_q;
+	reg [INPUT_PORT_NUM - 1:0] sa_global_inport_read_vld_counter_ena;
+	always @(*) begin
+		sa_local_vld_counter_d = sa_local_vld_counter_q;
+		sa_local_vld_counter_ena = 1'sb0;
+		sa_global_inport_read_vld_counter_d = sa_global_inport_read_vld_counter_q;
+		sa_global_inport_read_vld_counter_ena = 1'sb0;
+		begin : sv2v_autoblock_1
+			reg signed [31:0] i;
+			for (i = 0; i < INPUT_PORT_NUM; i = i + 1)
+				begin
+					if (sa_local_vld_i[i]) begin
+						sa_local_vld_counter_d[i * 64+:64] = sa_local_vld_counter_d[i * 64+:64] + 1;
+						sa_local_vld_counter_ena[i] = 1'b1;
+					end
+					if (sa_global_inport_read_vld_i[i]) begin
+						sa_global_inport_read_vld_counter_d[i * 64+:64] = sa_global_inport_read_vld_counter_d[i * 64+:64] + 1;
+						sa_global_inport_read_vld_counter_ena[i] = 1'b1;
+					end
+				end
+		end
+	end
+	generate
+		for (i = 0; i < INPUT_PORT_NUM; i = i + 1) begin : genblk1
+			std_dffre #(.WIDTH(64)) U_DAT_SA_LOCAL_VLD_COUNTER(
+				.clk(clk),
+				.rstn(rstn),
+				.en(sa_local_vld_counter_ena[i]),
+				.d(sa_local_vld_counter_d[i * 64+:64]),
+				.q(sa_local_vld_counter_q[i * 64+:64])
+			);
+			std_dffre #(.WIDTH(64)) U_DAT_SA_GLOBAL_INPORT_READ_VLD_COUNTER(
+				.clk(clk),
+				.rstn(rstn),
+				.en(sa_global_inport_read_vld_counter_ena[i]),
+				.d(sa_global_inport_read_vld_counter_d[i * 64+:64]),
+				.q(sa_global_inport_read_vld_counter_q[i * 64+:64])
+			);
+		end
+	endgenerate
+endmodule
+module priority_req_select (
+	req_vld_i,
+	req_priority_i,
+	req_vld_o
+);
+	parameter INPUT_NUM = 4;
+	parameter INPUT_NUM_IDX_W = (INPUT_NUM > 1 ? $clog2(INPUT_NUM) : 1);
+	parameter INPUT_PRIORITY_W = 4;
+	input wire [INPUT_NUM - 1:0] req_vld_i;
+	input wire [(INPUT_NUM * INPUT_PRIORITY_W) - 1:0] req_priority_i;
+	output wire [INPUT_NUM - 1:0] req_vld_o;
+	genvar i;
+	genvar j;
+	wire [(INPUT_NUM * INPUT_NUM) - 1:0] priority_compare_vector;
+	generate
+		for (i = 0; i < INPUT_NUM; i = i + 1) begin : gen_priority_compare_vector_i
+			for (j = 0; j < INPUT_NUM; j = j + 1) begin : gen_priority_compare_vector_j
+				if (i == j) begin : gen_diagonal
+					assign priority_compare_vector[(i * INPUT_NUM) + j] = req_vld_i[i];
+				end
+				else begin : gen_others
+					assign priority_compare_vector[(i * INPUT_NUM) + j] = ~req_vld_i[j] | (req_priority_i[i * INPUT_PRIORITY_W+:INPUT_PRIORITY_W] >= req_priority_i[j * INPUT_PRIORITY_W+:INPUT_PRIORITY_W]);
+				end
+			end
+		end
+		for (i = 0; i < INPUT_NUM; i = i + 1) begin : gen_req_vld_o
+			assign req_vld_o[i] = &priority_compare_vector[i * INPUT_NUM+:INPUT_NUM];
+		end
+	endgenerate
+endmodule
+module sa_global (
+	sa_local_vld_i,
+	sa_local_vc_id_i,
+	sa_local_qos_value_i,
+	sa_global_vld_o,
+	sa_global_qos_value_o,
+	sa_global_inport_id_oh_o,
+	sa_global_inport_vc_id_o,
+	vc_assignment_vld_i,
+	clk,
+	rstn
+);
+	parameter INPUT_NUM = 4;
+	parameter INPUT_NUM_IDX_W = (INPUT_NUM > 1 ? $clog2(INPUT_NUM) : 1);
+	input wire [INPUT_NUM - 1:0] sa_local_vld_i;
+	localparam rvh_noc_pkg_CHANNEL_NUM = 4;
+	localparam rvh_noc_pkg_INPUT_PORT_NUMBER = 6;
+	localparam rvh_noc_pkg_ROUTER_PORT_NUMBER = 4;
+	localparam rvh_noc_pkg_LOCAL_PORT_NUMBER = 2;
+	localparam rvh_noc_pkg_QOS_VC_NUM_PER_INPUT = 1;
+	localparam rvh_noc_pkg_VC_ID_NUM_MAX = 6;
+	localparam rvh_noc_pkg_VC_ID_NUM_MAX_W = 3;
+	input wire [(INPUT_NUM * 3) - 1:0] sa_local_vc_id_i;
+	localparam rvh_noc_pkg_QoS_Value_Width = 4;
+	input wire [(INPUT_NUM * 4) - 1:0] sa_local_qos_value_i;
+	output wire sa_global_vld_o;
+	output wire [3:0] sa_global_qos_value_o;
+	output wire [INPUT_NUM - 1:0] sa_global_inport_id_oh_o;
+	output wire [2:0] sa_global_inport_vc_id_o;
+	input wire vc_assignment_vld_i;
+	input wire clk;
+	input wire rstn;
+	wire [INPUT_NUM - 1:0] sa_global_grt_oh;
+	wire [INPUT_NUM_IDX_W - 1:0] sa_global_grt_idx;
+	wire [INPUT_NUM - 1:0] sa_local_vld_join_arb;
+	priority_req_select #(
+		.INPUT_NUM(INPUT_NUM),
+		.INPUT_PRIORITY_W(rvh_noc_pkg_QoS_Value_Width)
+	) sa_local_priority_req_select_u(
+		.req_vld_i(sa_local_vld_i),
+		.req_priority_i(sa_local_qos_value_i),
+		.req_vld_o(sa_local_vld_join_arb)
+	);
+	one_hot_rr_arb #(
+		.N_INPUT(INPUT_NUM),
+		.TIMEOUT_UPDATE_EN(1),
+		.TIMEOUT_UPDATE_CYCLE(10)
+	) sa_global_rr_arb_u(
+		.req_i(sa_local_vld_join_arb),
+		.update_i(vc_assignment_vld_i),
+		.grt_o(sa_global_grt_oh),
+		.grt_idx_o(sa_global_grt_idx),
+		.rstn(rstn),
+		.clk(clk)
+	);
+	assign sa_global_vld_o = |sa_local_vld_join_arb;
+	assign sa_global_inport_id_oh_o = sa_global_grt_oh;
+	onehot_mux #(
+		.SOURCE_COUNT(INPUT_NUM),
+		.DATA_WIDTH(rvh_noc_pkg_VC_ID_NUM_MAX_W)
+	) onehot_mux_sa_global_inport_vc_id_o_u(
+		.sel_i(sa_global_grt_oh),
+		.data_i(sa_local_vc_id_i),
+		.data_o(sa_global_inport_vc_id_o)
+	);
+	onehot_mux #(
+		.SOURCE_COUNT(INPUT_NUM),
+		.DATA_WIDTH(rvh_noc_pkg_QoS_Value_Width)
+	) onehot_mux_sa_global_qos_value_o_u(
+		.sel_i(sa_global_grt_oh),
+		.data_i(sa_local_qos_value_i),
+		.data_o(sa_global_qos_value_o)
+	);
+endmodule
+module sa_local (
+	vc_ctrl_head_vld_i,
+	vc_ctrl_head_i,
+	sa_local_vld_to_sa_global_o,
+	sa_local_vld_o,
+	sa_local_vc_id_o,
+	sa_local_vc_id_oh_o,
+	sa_local_qos_value_o,
+	inport_read_enable_sa_stage_i,
+	clk,
+	rstn
+);
+	parameter INPUT_NUM = 4;
+	parameter INPUT_NUM_IDX_W = (INPUT_NUM > 1 ? $clog2(INPUT_NUM) : 1);
+	input wire [INPUT_NUM - 1:0] vc_ctrl_head_vld_i;
+	localparam rvh_noc_pkg_QoS_Value_Width = 4;
+	localparam rvh_noc_pkg_TxnID_Width = 12;
+	localparam rvh_noc_pkg_NodeID_Device_Port_Width = 2;
+	localparam rvh_noc_pkg_NodeID_X_Width = 2;
+	localparam rvh_noc_pkg_NodeID_Y_Width = 2;
+	input wire [(INPUT_NUM * 33) - 1:0] vc_ctrl_head_i;
+	localparam rvh_noc_pkg_OUTPUT_PORT_NUMBER = 6;
+	output wire [5:0] sa_local_vld_to_sa_global_o;
+	output wire sa_local_vld_o;
+	output wire [INPUT_NUM_IDX_W - 1:0] sa_local_vc_id_o;
+	output wire [INPUT_NUM - 1:0] sa_local_vc_id_oh_o;
+	output wire [3:0] sa_local_qos_value_o;
+	input wire inport_read_enable_sa_stage_i;
+	input wire clk;
+	input wire rstn;
+	genvar i;
+	genvar j;
+	wire [INPUT_NUM - 1:0] sa_local_grt_oh;
+	wire [INPUT_NUM_IDX_W - 1:0] sa_local_grt_idx;
+	wire [INPUT_NUM - 1:0] vc_ctrl_head_vld_join_arb;
+	wire [(INPUT_NUM * 3) - 1:0] vc_ctrl_head_i_look_ahead_routing;
+	wire [(INPUT_NUM * 6) - 1:0] vc_ctrl_head_i_look_ahead_routing_match;
+	wire [3:0] vc_ctrl_head_i_qos_value_sel;
+	wire [32:0] vc_ctrl_head_sel;
+	wire [(INPUT_NUM * 4) - 1:0] vc_ctrl_head_qos_value;
+	generate
+		for (i = 0; i < INPUT_NUM; i = i + 1) begin : gen_vc_ctrl_head_qos_value
+			assign vc_ctrl_head_qos_value[i * 4+:4] = vc_ctrl_head_i[(i * 33) + 3-:rvh_noc_pkg_QoS_Value_Width];
+		end
+	endgenerate
+	priority_req_select #(
+		.INPUT_NUM(INPUT_NUM),
+		.INPUT_PRIORITY_W(rvh_noc_pkg_QoS_Value_Width)
+	) sa_local_priority_req_select_u(
+		.req_vld_i(vc_ctrl_head_vld_i),
+		.req_priority_i(vc_ctrl_head_qos_value),
+		.req_vld_o(vc_ctrl_head_vld_join_arb)
+	);
+	one_hot_rr_arb #(
+		.N_INPUT(INPUT_NUM),
+		.TIMEOUT_UPDATE_EN(1),
+		.TIMEOUT_UPDATE_CYCLE(10)
+	) sa_local_rr_arb_u(
+		.req_i(vc_ctrl_head_vld_join_arb),
+		.update_i(inport_read_enable_sa_stage_i),
+		.grt_o(sa_local_grt_oh),
+		.grt_idx_o(sa_local_grt_idx),
+		.rstn(rstn),
+		.clk(clk)
+	);
+	assign sa_local_vc_id_o = sa_local_grt_idx;
+	assign sa_local_vc_id_oh_o = sa_local_grt_oh;
+	assign sa_local_qos_value_o = vc_ctrl_head_sel[3-:rvh_noc_pkg_QoS_Value_Width];
+	assign sa_local_vld_o = |vc_ctrl_head_vld_join_arb;
+	generate
+		for (i = 0; i < rvh_noc_pkg_OUTPUT_PORT_NUMBER; i = i + 1) begin : genblk2
+			assign sa_local_vld_to_sa_global_o[i] = vc_ctrl_head_vld_join_arb[sa_local_grt_idx] & vc_ctrl_head_i_look_ahead_routing_match[(sa_local_grt_idx * 6) + i];
+		end
+		for (i = 0; i < INPUT_NUM; i = i + 1) begin : genblk3
+			assign vc_ctrl_head_i_look_ahead_routing[i * 3+:3] = vc_ctrl_head_i[(i * 33) + 6-:3];
+		end
+		for (i = 0; i < INPUT_NUM; i = i + 1) begin : gen_vc_ctrl_head_i_look_ahead_routing_match_i
+			for (j = 0; j < rvh_noc_pkg_OUTPUT_PORT_NUMBER; j = j + 1) begin : gen_vc_ctrl_head_i_look_ahead_routing_match_j
+				assign vc_ctrl_head_i_look_ahead_routing_match[(i * 6) + j] = vc_ctrl_head_i_look_ahead_routing[i * 3+:3] == j[2:0];
+			end
+		end
+	endgenerate
+	onehot_mux #(
+		.SOURCE_COUNT(INPUT_NUM),
+		.DATA_WIDTH(33)
+	) onehot_mux_qos_value_sel_u(
+		.sel_i(sa_local_grt_oh),
+		.data_i(vc_ctrl_head_i),
+		.data_o(vc_ctrl_head_sel)
+	);
+endmodule
+module std_dffe (
+	clk,
+	en,
+	d,
+	q
+);
+	parameter WIDTH = 8;
+	input clk;
+	input en;
+	input [WIDTH - 1:0] d;
+	output wire [WIDTH - 1:0] q;
+	reg [WIDTH - 1:0] dff_q;
+	always @(posedge clk)
+		if (en)
+			dff_q <= d;
+	assign q = dff_q;
+endmodule
+module std_dffre (
+	clk,
+	rstn,
+	en,
+	d,
+	q
+);
+	parameter WIDTH = 8;
+	input clk;
+	input rstn;
+	input en;
+	input [WIDTH - 1:0] d;
+	output wire [WIDTH - 1:0] q;
+	reg [WIDTH - 1:0] dff_q;
+	always @(posedge clk or negedge rstn)
+		if (~rstn)
+			dff_q <= {WIDTH {1'b0}};
+		else if (en)
+			dff_q <= d;
+	assign q = dff_q;
+endmodule
 module std_dffr (
 	clk,
 	rstn,
@@ -468,44 +1091,6 @@ module std_dffr (
 			dff_q <= d;
 	assign q = dff_q;
 endmodule
-module std_dffe (
-	clk,
-	en,
-	d,
-	q
-);
-	parameter WIDTH = 8;
-	input clk;
-	input en;
-	input [WIDTH - 1:0] d;
-	output wire [WIDTH - 1:0] q;
-	reg [WIDTH - 1:0] dff_q;
-	always @(posedge clk)
-		if (en)
-			dff_q <= d;
-	assign q = dff_q;
-endmodule
-// module std_dffre (
-// 	clk,
-// 	rstn,
-// 	en,
-// 	d,
-// 	q
-// );
-// 	parameter WIDTH = 8;
-// 	input clk;
-// 	input rstn;
-// 	input en;
-// 	input [WIDTH - 1:0] d;
-// 	output wire [WIDTH - 1:0] q;
-// 	reg [WIDTH - 1:0] dff_q;
-// 	always @(posedge clk or negedge rstn)
-// 		if (~rstn)
-// 			dff_q <= {WIDTH {1'b0}};
-// 		else if (en)
-// 			dff_q <= d;
-// 	assign q = dff_q;
-// endmodule
 module std_dffrve (
 	clk,
 	rstn,
@@ -528,6 +1113,126 @@ module std_dffrve (
 		else if (en)
 			dff_q <= d;
 	assign q = dff_q;
+endmodule
+module switch_AC76E (
+	vc_data_head_fromN_i,
+	vc_data_head_fromS_i,
+	vc_data_head_fromE_i,
+	vc_data_head_fromW_i,
+	vc_data_head_fromL_i,
+	inport_read_enable_st_stage_i,
+	inport_read_vc_id_st_stage_i,
+	outport_vld_st_stage_i,
+	outport_select_inport_id_st_stage_i,
+	outport_vc_id_st_stage_i,
+	outport_look_ahead_routing_st_stage_i,
+	tx_flit_pend_o,
+	tx_flit_v_o,
+	tx_flit_o,
+	tx_flit_vc_id_o,
+	tx_flit_look_ahead_routing_o
+);
+	parameter INPUT_PORT_NUM = 5;
+	parameter OUTPUT_PORT_NUM = 5;
+	parameter LOCAL_PORT_NUM = INPUT_PORT_NUM - 4;
+	parameter VC_NUM_INPUT_N = 2;
+	parameter VC_NUM_INPUT_S = 2;
+	parameter VC_NUM_INPUT_E = 4;
+	parameter VC_NUM_INPUT_W = 4;
+	parameter VC_NUM_INPUT_L = 4;
+	parameter VC_NUM_INPUT_N_IDX_W = (VC_NUM_INPUT_N > 1 ? $clog2(VC_NUM_INPUT_N) : 1);
+	parameter VC_NUM_INPUT_S_IDX_W = (VC_NUM_INPUT_S > 1 ? $clog2(VC_NUM_INPUT_S) : 1);
+	parameter VC_NUM_INPUT_E_IDX_W = (VC_NUM_INPUT_E > 1 ? $clog2(VC_NUM_INPUT_E) : 1);
+	parameter VC_NUM_INPUT_W_IDX_W = (VC_NUM_INPUT_W > 1 ? $clog2(VC_NUM_INPUT_W) : 1);
+	parameter VC_NUM_INPUT_L_IDX_W = (VC_NUM_INPUT_L > 1 ? $clog2(VC_NUM_INPUT_L) : 1);
+	input wire [(VC_NUM_INPUT_N * 256) - 1:0] vc_data_head_fromN_i;
+	input wire [(VC_NUM_INPUT_S * 256) - 1:0] vc_data_head_fromS_i;
+	input wire [(VC_NUM_INPUT_E * 256) - 1:0] vc_data_head_fromE_i;
+	input wire [(VC_NUM_INPUT_W * 256) - 1:0] vc_data_head_fromW_i;
+	input wire [((LOCAL_PORT_NUM * VC_NUM_INPUT_L) * 256) - 1:0] vc_data_head_fromL_i;
+	input wire [INPUT_PORT_NUM - 1:0] inport_read_enable_st_stage_i;
+	localparam rvh_noc_pkg_CHANNEL_NUM = 4;
+	localparam rvh_noc_pkg_INPUT_PORT_NUMBER = 6;
+	localparam rvh_noc_pkg_ROUTER_PORT_NUMBER = 4;
+	localparam rvh_noc_pkg_LOCAL_PORT_NUMBER = 2;
+	localparam rvh_noc_pkg_QOS_VC_NUM_PER_INPUT = 1;
+	localparam rvh_noc_pkg_VC_ID_NUM_MAX = 6;
+	localparam rvh_noc_pkg_VC_ID_NUM_MAX_W = 3;
+	input wire [(INPUT_PORT_NUM * 3) - 1:0] inport_read_vc_id_st_stage_i;
+	input wire [OUTPUT_PORT_NUM - 1:0] outport_vld_st_stage_i;
+	input wire [(OUTPUT_PORT_NUM * 3) - 1:0] outport_select_inport_id_st_stage_i;
+	input wire [(OUTPUT_PORT_NUM * 3) - 1:0] outport_vc_id_st_stage_i;
+	input wire [(OUTPUT_PORT_NUM * 3) - 1:0] outport_look_ahead_routing_st_stage_i;
+	output wire [OUTPUT_PORT_NUM - 1:0] tx_flit_pend_o;
+	output wire [OUTPUT_PORT_NUM - 1:0] tx_flit_v_o;
+	output reg [(OUTPUT_PORT_NUM * 256) - 1:0] tx_flit_o;
+	output wire [(OUTPUT_PORT_NUM * 3) - 1:0] tx_flit_vc_id_o;
+	output wire [(OUTPUT_PORT_NUM * 3) - 1:0] tx_flit_look_ahead_routing_o;
+	genvar i;
+	assign tx_flit_pend_o = 1'sb1;
+	wire [(INPUT_PORT_NUM * 256) - 1:0] vc_head_data;
+	assign vc_head_data[0+:256] = vc_data_head_fromN_i[inport_read_vc_id_st_stage_i[VC_NUM_INPUT_N_IDX_W - 1-:VC_NUM_INPUT_N_IDX_W] * 256+:256];
+	assign vc_head_data[256+:256] = vc_data_head_fromS_i[inport_read_vc_id_st_stage_i[VC_NUM_INPUT_S_IDX_W + 2-:VC_NUM_INPUT_S_IDX_W] * 256+:256];
+	assign vc_head_data[512+:256] = vc_data_head_fromE_i[inport_read_vc_id_st_stage_i[VC_NUM_INPUT_E_IDX_W + 5-:VC_NUM_INPUT_E_IDX_W] * 256+:256];
+	assign vc_head_data[768+:256] = vc_data_head_fromW_i[inport_read_vc_id_st_stage_i[VC_NUM_INPUT_W_IDX_W + 8-:VC_NUM_INPUT_W_IDX_W] * 256+:256];
+	generate
+		if (LOCAL_PORT_NUM > 0) begin : gen_have_vc_data_head_fromL_i
+			for (i = 0; i < LOCAL_PORT_NUM; i = i + 1) begin : gen_vc_data_head_fromL_i
+				assign vc_head_data[(4 + i) * 256+:256] = vc_data_head_fromL_i[((i * VC_NUM_INPUT_L) + inport_read_vc_id_st_stage_i[((4 + i) * 3) + (VC_NUM_INPUT_L_IDX_W - 1)-:VC_NUM_INPUT_L_IDX_W]) * 256+:256];
+			end
+		end
+	endgenerate
+	assign tx_flit_v_o = outport_vld_st_stage_i;
+	assign tx_flit_vc_id_o = outport_vc_id_st_stage_i;
+	assign tx_flit_look_ahead_routing_o = outport_look_ahead_routing_st_stage_i;
+	always @(*)
+		case (outport_select_inport_id_st_stage_i[0+:3])
+			3'd1: tx_flit_o[0+:256] = vc_head_data[256+:256];
+			3'd2: tx_flit_o[0+:256] = vc_head_data[512+:256];
+			3'd3: tx_flit_o[0+:256] = vc_head_data[768+:256];
+			3'd4: tx_flit_o[0+:256] = vc_head_data[1024+:256];
+			3'd5: tx_flit_o[0+:256] = vc_head_data[1280+:256];
+			default: tx_flit_o[0+:256] = vc_head_data[256+:256];
+		endcase
+	always @(*)
+		case (outport_select_inport_id_st_stage_i[3+:3])
+			3'd0: tx_flit_o[256+:256] = vc_head_data[0+:256];
+			3'd2: tx_flit_o[256+:256] = vc_head_data[512+:256];
+			3'd3: tx_flit_o[256+:256] = vc_head_data[768+:256];
+			3'd4: tx_flit_o[256+:256] = vc_head_data[1024+:256];
+			3'd5: tx_flit_o[256+:256] = vc_head_data[1280+:256];
+			default: tx_flit_o[256+:256] = vc_head_data[0+:256];
+		endcase
+	always @(*)
+		case (outport_select_inport_id_st_stage_i[6+:3])
+			3'd3: tx_flit_o[512+:256] = vc_head_data[768+:256];
+			3'd4: tx_flit_o[512+:256] = vc_head_data[1024+:256];
+			3'd5: tx_flit_o[512+:256] = vc_head_data[1280+:256];
+			default: tx_flit_o[512+:256] = vc_head_data[768+:256];
+		endcase
+	always @(*)
+		case (outport_select_inport_id_st_stage_i[9+:3])
+			3'd2: tx_flit_o[768+:256] = vc_head_data[512+:256];
+			3'd4: tx_flit_o[768+:256] = vc_head_data[1024+:256];
+			3'd5: tx_flit_o[768+:256] = vc_head_data[1280+:256];
+			default: tx_flit_o[768+:256] = vc_head_data[512+:256];
+		endcase
+	generate
+		if (LOCAL_PORT_NUM > 0) begin : gen_have_multi_local_port_in_switch
+			for (i = 0; i < LOCAL_PORT_NUM; i = i + 1) begin : gen_multi_local_port_in_switch
+				always @(*)
+					case (outport_select_inport_id_st_stage_i[(4 + i) * 3+:3])
+						3'd0: tx_flit_o[(4 + i) * 256+:256] = vc_head_data[0+:256];
+						3'd1: tx_flit_o[(4 + i) * 256+:256] = vc_head_data[256+:256];
+						3'd2: tx_flit_o[(4 + i) * 256+:256] = vc_head_data[512+:256];
+						3'd3: tx_flit_o[(4 + i) * 256+:256] = vc_head_data[768+:256];
+						3'd4: tx_flit_o[(4 + i) * 256+:256] = vc_head_data[1024+:256];
+						3'd5: tx_flit_o[(4 + i) * 256+:256] = vc_head_data[1280+:256];
+						default: tx_flit_o[(4 + i) * 256+:256] = vc_head_data[0+:256];
+					endcase
+			end
+		end
+	endgenerate
 endmodule
 module vnet_router (
 	rx_flit_pend_i,
@@ -1478,7 +2183,7 @@ module vnet_router (
 			);
 		end
 	endgenerate
-	switch #(
+	switch_AC76E #(
 		.INPUT_PORT_NUM(INPUT_PORT_NUM),
 		.OUTPUT_PORT_NUM(OUTPUT_PORT_NUM),
 		.VC_NUM_INPUT_N(VC_NUM_INPUT_N),

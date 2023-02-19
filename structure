@@ -47,10 +47,12 @@ vnet_router
     performance_monitor *
         std_dffre
 
-    
+    one_hot_rr_arb
 
-    
+    priority_req_select
 
+    one_hot_priority_encoder
 
+    left_circular_rotate
 
-    input_port_226D0
+    oh2idx

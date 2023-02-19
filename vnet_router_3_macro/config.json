@@ -1,0 +1,20 @@
+{
+    "DESIGN_NAME": "vnet_router",
+    "VERILOG_FILES":   "dir::*.v",
+    "DESIGN_IS_CORE": 1,
+    "ROUTING_CORES": "48",
+    "CLOCK_PERIOD": "10",
+    "CLOCK_PORT": "clk",
+    "FP_SIZING": "relative",
+    "PL_TARGET_DENSITY": "0.43",
+    "FP_CORE_UTIL": "40",
+    "FP_IO_MIN_DISTANCE": "1",
+    "VERILOG_FILES_BLACKBOX": ["dir::../sa_global/*.v","dir::../sa_local/*.v","dir::../input_port/*.v"],
+    "EXTRA_LEFS": ["dir::../sa_global/runs/density_0.45/results/final/lef/sa_global.lef",
+                    "dir::../sa_local/runs/density_0.43/results/final/lef/sa_local.lef",
+                    "dir::../input_port/runs/density_0.43/results/final/lef/input_port.lef"],
+
+    "EXTRA_GDS_FILES": ["dir::../sa_global/runs/density_0.45/results/final/gds/sa_global.gds",
+                    "dir::../sa_local/runs/density_0.43/results/final/gds/sa_local.gds",
+                    "dir::../input_port/runs/density_0.43/results/final/gds/input_port.gds"]
+}
