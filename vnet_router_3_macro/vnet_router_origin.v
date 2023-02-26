@@ -869,6 +869,171 @@ module priority_req_select (
 		end
 	endgenerate
 endmodule
+module sa_global (
+	sa_local_vld_i,
+	sa_local_vc_id_i,
+	sa_local_qos_value_i,
+	sa_global_vld_o,
+	sa_global_qos_value_o,
+	sa_global_inport_id_oh_o,
+	sa_global_inport_vc_id_o,
+	vc_assignment_vld_i,
+	clk,
+	rstn
+);
+	parameter INPUT_NUM = 4;
+	parameter INPUT_NUM_IDX_W = (INPUT_NUM > 1 ? $clog2(INPUT_NUM) : 1);
+	input wire [INPUT_NUM - 1:0] sa_local_vld_i;
+	localparam rvh_noc_pkg_CHANNEL_NUM = 4;
+	localparam rvh_noc_pkg_INPUT_PORT_NUMBER = 6;
+	localparam rvh_noc_pkg_ROUTER_PORT_NUMBER = 4;
+	localparam rvh_noc_pkg_LOCAL_PORT_NUMBER = 2;
+	localparam rvh_noc_pkg_QOS_VC_NUM_PER_INPUT = 1;
+	localparam rvh_noc_pkg_VC_ID_NUM_MAX = 6;
+	localparam rvh_noc_pkg_VC_ID_NUM_MAX_W = 3;
+	input wire [(INPUT_NUM * 3) - 1:0] sa_local_vc_id_i;
+	localparam rvh_noc_pkg_QoS_Value_Width = 4;
+	input wire [(INPUT_NUM * 4) - 1:0] sa_local_qos_value_i;
+	output wire sa_global_vld_o;
+	output wire [3:0] sa_global_qos_value_o;
+	output wire [INPUT_NUM - 1:0] sa_global_inport_id_oh_o;
+	output wire [2:0] sa_global_inport_vc_id_o;
+	input wire vc_assignment_vld_i;
+	input wire clk;
+	input wire rstn;
+	wire [INPUT_NUM - 1:0] sa_global_grt_oh;
+	wire [INPUT_NUM_IDX_W - 1:0] sa_global_grt_idx;
+	wire [INPUT_NUM - 1:0] sa_local_vld_join_arb;
+	priority_req_select #(
+		.INPUT_NUM(INPUT_NUM),
+		.INPUT_PRIORITY_W(rvh_noc_pkg_QoS_Value_Width)
+	) sa_local_priority_req_select_u(
+		.req_vld_i(sa_local_vld_i),
+		.req_priority_i(sa_local_qos_value_i),
+		.req_vld_o(sa_local_vld_join_arb)
+	);
+	one_hot_rr_arb #(
+		.N_INPUT(INPUT_NUM),
+		.TIMEOUT_UPDATE_EN(1),
+		.TIMEOUT_UPDATE_CYCLE(10)
+	) sa_global_rr_arb_u(
+		.req_i(sa_local_vld_join_arb),
+		.update_i(vc_assignment_vld_i),
+		.grt_o(sa_global_grt_oh),
+		.grt_idx_o(sa_global_grt_idx),
+		.rstn(rstn),
+		.clk(clk)
+	);
+	assign sa_global_vld_o = |sa_local_vld_join_arb;
+	assign sa_global_inport_id_oh_o = sa_global_grt_oh;
+	onehot_mux #(
+		.SOURCE_COUNT(INPUT_NUM),
+		.DATA_WIDTH(rvh_noc_pkg_VC_ID_NUM_MAX_W)
+	) onehot_mux_sa_global_inport_vc_id_o_u(
+		.sel_i(sa_global_grt_oh),
+		.data_i(sa_local_vc_id_i),
+		.data_o(sa_global_inport_vc_id_o)
+	);
+	onehot_mux #(
+		.SOURCE_COUNT(INPUT_NUM),
+		.DATA_WIDTH(rvh_noc_pkg_QoS_Value_Width)
+	) onehot_mux_sa_global_qos_value_o_u(
+		.sel_i(sa_global_grt_oh),
+		.data_i(sa_local_qos_value_i),
+		.data_o(sa_global_qos_value_o)
+	);
+endmodule
+module sa_local (
+	vc_ctrl_head_vld_i,
+	vc_ctrl_head_i,
+	sa_local_vld_to_sa_global_o,
+	sa_local_vld_o,
+	sa_local_vc_id_o,
+	sa_local_vc_id_oh_o,
+	sa_local_qos_value_o,
+	inport_read_enable_sa_stage_i,
+	clk,
+	rstn
+);
+	parameter INPUT_NUM = 4;
+	parameter INPUT_NUM_IDX_W = (INPUT_NUM > 1 ? $clog2(INPUT_NUM) : 1);
+	input wire [INPUT_NUM - 1:0] vc_ctrl_head_vld_i;
+	localparam rvh_noc_pkg_QoS_Value_Width = 4;
+	localparam rvh_noc_pkg_TxnID_Width = 12;
+	localparam rvh_noc_pkg_NodeID_Device_Port_Width = 2;
+	localparam rvh_noc_pkg_NodeID_X_Width = 2;
+	localparam rvh_noc_pkg_NodeID_Y_Width = 2;
+	input wire [(INPUT_NUM * 33) - 1:0] vc_ctrl_head_i;
+	localparam rvh_noc_pkg_OUTPUT_PORT_NUMBER = 6;
+	output wire [5:0] sa_local_vld_to_sa_global_o;
+	output wire sa_local_vld_o;
+	output wire [INPUT_NUM_IDX_W - 1:0] sa_local_vc_id_o;
+	output wire [INPUT_NUM - 1:0] sa_local_vc_id_oh_o;
+	output wire [3:0] sa_local_qos_value_o;
+	input wire inport_read_enable_sa_stage_i;
+	input wire clk;
+	input wire rstn;
+	genvar i;
+	genvar j;
+	wire [INPUT_NUM - 1:0] sa_local_grt_oh;
+	wire [INPUT_NUM_IDX_W - 1:0] sa_local_grt_idx;
+	wire [INPUT_NUM - 1:0] vc_ctrl_head_vld_join_arb;
+	wire [(INPUT_NUM * 3) - 1:0] vc_ctrl_head_i_look_ahead_routing;
+	wire [(INPUT_NUM * 6) - 1:0] vc_ctrl_head_i_look_ahead_routing_match;
+	wire [3:0] vc_ctrl_head_i_qos_value_sel;
+	wire [32:0] vc_ctrl_head_sel;
+	wire [(INPUT_NUM * 4) - 1:0] vc_ctrl_head_qos_value;
+	generate
+		for (i = 0; i < INPUT_NUM; i = i + 1) begin : gen_vc_ctrl_head_qos_value
+			assign vc_ctrl_head_qos_value[i * 4+:4] = vc_ctrl_head_i[(i * 33) + 3-:rvh_noc_pkg_QoS_Value_Width];
+		end
+	endgenerate
+	priority_req_select #(
+		.INPUT_NUM(INPUT_NUM),
+		.INPUT_PRIORITY_W(rvh_noc_pkg_QoS_Value_Width)
+	) sa_local_priority_req_select_u(
+		.req_vld_i(vc_ctrl_head_vld_i),
+		.req_priority_i(vc_ctrl_head_qos_value),
+		.req_vld_o(vc_ctrl_head_vld_join_arb)
+	);
+	one_hot_rr_arb #(
+		.N_INPUT(INPUT_NUM),
+		.TIMEOUT_UPDATE_EN(1),
+		.TIMEOUT_UPDATE_CYCLE(10)
+	) sa_local_rr_arb_u(
+		.req_i(vc_ctrl_head_vld_join_arb),
+		.update_i(inport_read_enable_sa_stage_i),
+		.grt_o(sa_local_grt_oh),
+		.grt_idx_o(sa_local_grt_idx),
+		.rstn(rstn),
+		.clk(clk)
+	);
+	assign sa_local_vc_id_o = sa_local_grt_idx;
+	assign sa_local_vc_id_oh_o = sa_local_grt_oh;
+	assign sa_local_qos_value_o = vc_ctrl_head_sel[3-:rvh_noc_pkg_QoS_Value_Width];
+	assign sa_local_vld_o = |vc_ctrl_head_vld_join_arb;
+	generate
+		for (i = 0; i < rvh_noc_pkg_OUTPUT_PORT_NUMBER; i = i + 1) begin : genblk2
+			assign sa_local_vld_to_sa_global_o[i] = vc_ctrl_head_vld_join_arb[sa_local_grt_idx] & vc_ctrl_head_i_look_ahead_routing_match[(sa_local_grt_idx * 6) + i];
+		end
+		for (i = 0; i < INPUT_NUM; i = i + 1) begin : genblk3
+			assign vc_ctrl_head_i_look_ahead_routing[i * 3+:3] = vc_ctrl_head_i[(i * 33) + 6-:3];
+		end
+		for (i = 0; i < INPUT_NUM; i = i + 1) begin : gen_vc_ctrl_head_i_look_ahead_routing_match_i
+			for (j = 0; j < rvh_noc_pkg_OUTPUT_PORT_NUMBER; j = j + 1) begin : gen_vc_ctrl_head_i_look_ahead_routing_match_j
+				assign vc_ctrl_head_i_look_ahead_routing_match[(i * 6) + j] = vc_ctrl_head_i_look_ahead_routing[i * 3+:3] == j[2:0];
+			end
+		end
+	endgenerate
+	onehot_mux #(
+		.SOURCE_COUNT(INPUT_NUM),
+		.DATA_WIDTH(33)
+	) onehot_mux_qos_value_sel_u(
+		.sel_i(sa_local_grt_oh),
+		.data_i(vc_ctrl_head_i),
+		.data_o(vc_ctrl_head_sel)
+	);
+endmodule
 module std_dffe (
 	clk,
 	en,

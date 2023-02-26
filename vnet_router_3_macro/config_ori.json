@@ -1,13 +1,13 @@
 {
     "DESIGN_NAME": "vnet_router",
-    "VERILOG_FILES":   "dir::*.v",
+    "VERILOG_FILES":   "dir::vnet_router.v",
     "DESIGN_IS_CORE": 1,
     "ROUTING_CORES": "48",
     "CLOCK_PERIOD": "10",
     "CLOCK_PORT": "clk",
     "FP_SIZING": "relative",
-    "PL_TARGET_DENSITY": "0.43",
-    "FP_CORE_UTIL": "40",
+    "PL_TARGET_DENSITY": "0.40",
+    "FP_CORE_UTIL": "35",
     "FP_IO_MIN_DISTANCE": "1",
     "VERILOG_FILES_BLACKBOX": ["dir::../sa_global/*.v","dir::../sa_local/*.v","dir::../input_port/*.v"],
     "EXTRA_LEFS": ["dir::../sa_global/runs/density_0.45/results/final/lef/sa_global.lef",
@@ -16,5 +16,14 @@
 
     "EXTRA_GDS_FILES": ["dir::../sa_global/runs/density_0.45/results/final/gds/sa_global.gds",
                     "dir::../sa_local/runs/density_0.43/results/final/gds/sa_local.gds",
-                    "dir::../input_port/runs/density_0.43/results/final/gds/input_port.gds"]
+                    "dir::../input_port/runs/density_0.43/results/final/gds/input_port.gds"],
+    "QUIT_ON_TR_DRC": 0,
+    "QUIT_ON_MAGIC_DRC": 0,
+    "QUIT_ON_ILLEGAL_OVERLAPS": 0,
+    "QUIT_ON_LVS_ERROR": 0,
+    "GRID_SPACING": 0.07,
+    "FP_PDN_CHECK_NODES": 0,
+    "PL_RESIZER_DESIGN_OPTIMIZATIONS": 0,
+    "REPORT_OVERLAP": 0
+
 }

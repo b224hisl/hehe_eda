@@ -2,7 +2,7 @@
 
 # 执行命令
 export design_name=vnet_router_3_macro #design folder name
-rm -rf ./runs/RUN*
+#rm -rf ./runs/RUN*
 
 echo "++++Design folder is $design_name++++"
 
