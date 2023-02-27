@@ -1,0 +1,17 @@
+netlist
+/work/stu/yzhu/ai-chip/hehe_eda/vnet_router_3_macro/runs/RUN_2023.02.26_17.22.57/results/synthesis/vnet_router.v
+    ALL
+/work/stu/yzhu/ai-chip/hehe_eda/vnet_router_all/runs/RUN_2023.02.26_18.01.27/results/synthesis/vnet_router.v
+
+
+tlef
+/work/stu/yzhu/ai-chip/hehe_eda/conda-env/share/pdk/sky130A/libs.ref/sky130_fd_sc_hd/techlef/sky130_fd_sc_hd__nom.tlef
+
+lef
+/work/stu/yzhu/ai-chip/hehe_eda/conda-env/share/pdk/sky130A/libs.ref/sky130_fd_sc_hd/lef/sky130_fd_sc_hd.lef
+/work/stu/yzhu/ai-chip/hehe_eda/sa_global/runs/density_0.45/results/final/lef/sa_global.lef
+/work/stu/yzhu/ai-chip/hehe_eda/input_port/runs/density_0.43/results/final/lef/input_port.lef
+/work/stu/yzhu/ai-chip/hehe_eda/sa_local/runs/density_0.43/results/final/lef/sa_local.lef
+
+mmmc
+/work/stu/yzhu/ai-chip/hehe_eda/syn_opt_orv64.mmmc.tcl
